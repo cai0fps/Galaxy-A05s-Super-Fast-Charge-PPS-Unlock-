@@ -215,10 +215,9 @@
                 aboutBody: `
                     <div class="info-item">⚡ <strong>Tensão de 4.4V vs 9V:</strong> A bateria do Galaxy A05s é uma célula de Íon de Lítio (1S) com limite físico máximo seguro de <strong>4.40V a 4.45V</strong>. A tensão de <strong>~9.0V PPS</strong> do carregador corre apenas no cabo USB-C para reduzir perdas e calor na fiação.</div>
                     <div class="info-item">🔄 <strong>Divisor 2:1 (Silergy SP2130):</strong> O chip Charge Pump opera com ~97% de eficiência, dividindo a tensão de 9V pela metade (~4.4V) para a célula e <strong>duplicando a corrente</strong> que entra na bateria (ex: 1.4A no cabo viram 2.8A na bateria).</div>
-                    <div class="info-item">📐 <strong>A Conta dos Watts (Certa e Dividida):</strong><br>
-                    • <strong>Potência Dividida (Célula):</strong> <code>Vbat × Ibat</code> (ex: 4.4V × 2.8A ≈ <strong>12.3 W</strong>). É a potência química real líquida entregue à bateria a ~4.4V.<br>
-                    • <strong>Potência da Fonte (Escala 9V):</strong> <code>9.0V × Ibat</code> (ex: 9.0V × 2.8A ≈ <strong>25.2 W</strong>). É o cálculo nominal equivalente à especificação de 25W do carregador.<br>
-                    • <strong>Potência no Cabo USB:</strong> <code>9.0V × 1.4A ≈ 12.6 W</code> consumidos da fonte antes da duplicação de corrente.</div>
+                    <div class="info-item">📐 <strong>Diferença de Potência por Fonte:</strong><br>
+                    • <strong>USB do PC / 5V Comum:</strong> Porta de 5.0V com Charge Pump desligado. Potência real de <strong>~2.5W a 3.5W</strong> (carga lenta normal).<br>
+                    • <strong>Tomada PPS 25W:</strong> Cabo opera a ~9.0V com Charge Pump ativo (2:1). Consumo real de <strong>~12.5W a 14.5W</strong> no cabo (entregando ~2.8A a 3.3A na bateria com teto nominal do carregador em 25W).</div>
                 `,
                 disclaimer: "⚠️ <strong>Termo de Responsabilidade & Consentimento:</strong> O uso deste módulo como um todo e em qualquer perfil é estritamente experimental. O usuário declara pleno consentimento e assume 100% da responsabilidade por quaisquer problemas, danos materiais ou desgaste do aparelho. O desenvolvedor <strong>@cai0fps</strong> isenta-se expressamente de quaisquer danos ou problemas decorrentes do uso.",
                 ultraPrompt: "⚠️ AVISO DE RESPONSABILIDADE & CONSENTIMENTO:\n\nO Modo ULTRA desativa os limitadores termicos Qualcomm e o throttling de tela acesa.\n\nVoce declara estar ciente dos riscos de temperatura e desgaste, isentando expressamente o autor @cai0fps de qualquer responsabilidade por eventuais problemas ou danos ao aparelho.\n\nDeseja ativar o Modo ULTRA mesmo assim?",
@@ -255,10 +254,9 @@
                 aboutBody: `
                     <div class="info-item">⚡ <strong>4.4V vs 9V Voltage:</strong> The Galaxy A05s battery is a 1S Lithium cell with a strict safe maximum of <strong>4.40V to 4.45V</strong>. The <strong>~9.0V PPS</strong> from the charger travels strictly through the USB-C cable to minimize wire losses and heat.</div>
                     <div class="info-item">🔄 <strong>2:1 Divider (Silergy SP2130):</strong> The Charge Pump operates at ~97% efficiency, dividing the 9V cable voltage by two (~4.4V) for the cell and <strong>doubling the incoming current</strong> (e.g. 1.4A on cable becomes 2.8A in battery).</div>
-                    <div class="info-item">📐 <strong>Watts Calculation (Exact & Divided):</strong><br>
-                    • <strong>Divided Power (Cell):</strong> <code>Vbat × Ibat</code> (e.g. 4.4V × 2.8A ≈ <strong>12.3 W</strong>). Net chemical power delivered into the cell at ~4.4V.<br>
-                    • <strong>Source Power (9V Scale):</strong> <code>9.0V × Ibat</code> (e.g. 9.0V × 2.8A ≈ <strong>25.2 W</strong>). Nominal power corresponding to the 25W charger rating.<br>
-                    • <strong>USB Cable Power:</strong> <code>9.0V × 1.4A ≈ 12.6 W</code> drawn from charger before current doubling.</div>
+                    <div class="info-item">📐 <strong>Power by Charger Source:</strong><br>
+                    • <strong>PC USB / 5V Regular:</strong> 5.0V source with Charge Pump off. Real power draw is <strong>~2.5W to 3.5W</strong> (normal slow charge).<br>
+                    • <strong>Wall PPS 25W:</strong> Cable runs at ~9.0V with 2:1 Charge Pump active. Real cable draw is <strong>~12.5W to 14.5W</strong> (delivering ~2.8A to 3.3A into battery, nominal charger cap at 25W).</div>
                 `,
                 disclaimer: "⚠️ <strong>Terms of Use & Disclaimer:</strong> The use of this module in any profile is strictly experimental. The user declares full consent and assumes 100% responsibility for any issues, hardware damages or battery degradation. The developer <strong>@cai0fps</strong> expressly disclaims any liability for damages arising from the use of this software.",
                 ultraPrompt: "⚠️ TERMS OF USE & DISCLAIMER CONFIRMATION:\n\nULTRA Mode disables Qualcomm thermal throttling and screen-on throttling.\n\nYou declare full awareness of thermal risks and battery stress, expressly exempting developer @cai0fps from any liability for hardware issues or damage.\n\nDo you want to enable ULTRA Mode?",
@@ -352,6 +350,8 @@
                 }
 
                 const isDischarging = ibat.startsWith("-") || proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
+                const isPPS = proto.indexOf("PPS") !== -1;
+                const isAFC = proto.indexOf("FAST") !== -1 || proto.indexOf("AFC") !== -1;
 
                 document.getElementById("val-soc").innerText = soc + " %";
                 document.getElementById("val-vbat").innerText = (vbat !== "--") ? `${t.cardVbatSub}: ${vbat} V` : "-- V";
@@ -372,7 +372,13 @@
                     } else {
                         valIbatEl.innerText = "+" + iNum + " mA";
                         valIbatEl.style.color = "var(--accent-green)";
-                        valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum / 2) + " mA (÷2)";
+                        if (isPPS) {
+                            valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum / 2) + " mA (÷2 SP2130)";
+                        } else if (isAFC) {
+                            valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum * 4.2 / 9.0 / 0.85) + " mA (Buck 9V)";
+                        } else {
+                            valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum * 4.0 / 5.0 / 0.88) + " mA (USB 5V)";
+                        }
                     }
 
                     if (vbat !== "--") {
@@ -389,10 +395,25 @@
                             } else {
                                 valPowerBatEl.innerText = "+" + wattsBat + " W";
                                 valPowerBatEl.style.color = "var(--accent)";
-                                valPowerBatSubEl.innerText = t.cardPowerBatSub;
-                                valPowerSrcEl.innerText = (9.0 * iNum / 1000).toFixed(1) + " W";
-                                valPowerSrcEl.style.color = "var(--accent-green)";
-                                valPowerSrcSubEl.innerText = t.cardPowerSrcSub;
+                                valPowerBatSubEl.innerText = (currentLang === "pt") ? "Célula (~4.4V × I)" : "Cell (~4.4V × I)";
+
+                                if (isPPS) {
+                                    const wattsSrc = (vNum * iNum * 1.03 / 1000).toFixed(1);
+                                    valPowerSrcEl.innerText = wattsSrc + " W";
+                                    valPowerSrcEl.style.color = "var(--accent-green)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte ~9V (PPS 25W)" : "Source ~9V (25W PPS)";
+                                } else if (isAFC) {
+                                    const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
+                                    valPowerSrcEl.innerText = wattsSrc + " W";
+                                    valPowerSrcEl.style.color = "var(--accent-amber)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 9V (AFC 15W)" : "Source 9V (AFC 15W)";
+                                } else {
+                                    // PC USB ou Carregador Comum de 5V
+                                    const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
+                                    valPowerSrcEl.innerText = wattsSrc + " W";
+                                    valPowerSrcEl.style.color = "var(--text-dim)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5V (USB PC / Comum)" : "Source 5V (PC USB / Regular)";
+                                }
                             }
                         }
                     }

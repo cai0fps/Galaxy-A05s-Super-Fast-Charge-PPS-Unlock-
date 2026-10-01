@@ -53,36 +53,6 @@ ibat_ma="$(( ibat_abs / 1000 ))"
 temp_c="$((temp / 10)).$((temp % 10))"
 quiet_c="$((quiet_t / 1000)).$(((quiet_t % 1000) / 100))"
 
-# Sinal da corrente e potencia (- em bateria/descarga, + conectado)
-if [ "$is_charging" = "1" ]; then
-    sign="+"
-    p_sign="+"
-    p_label_pt="entregues"
-    p_label_en="delivered"
-    power_9v_mw=$((9 * ibat_ma))
-    power_9v_w="$((power_9v_mw / 1000)).$(((power_9v_mw % 1000) / 100))"
-    cabo_ma="$((ibat_ma / 2))"
-else
-    sign="-"
-    p_sign="-"
-    p_label_pt="consumo"
-    p_label_en="consumption"
-    power_9v_w="0.0"
-    cabo_ma="0"
-fi
-
-# Potencia instantanea na Bateria (Tensão Dividida ~4.4V)
-vbat_int=$((vbat / 10000))
-power_mw=$((vbat_int * ibat_ma / 100))
-power_w="${p_sign}$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
-
-# Verificacao do driver no kernel (aw35615_whole)
-if lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
-    [ "$IS_PT" = "1" ] && drv_status="ATIVO (Kprobe Universal @cai0fps)" || drv_status="ACTIVE (Universal Kprobe @cai0fps)"
-else
-    [ "$IS_PT" = "1" ] && drv_status="INATIVO" || drv_status="INACTIVE"
-fi
-
 # Protocolo de Carga via dumpsys battery
 chg_line=$(dumpsys battery 2>/dev/null | grep "charger_type:" | head -n 1)
 chg_type="${chg_line##* }"
@@ -98,6 +68,69 @@ case "$chg_type" in
         fi
         ;;
 esac
+
+# Potencia instantanea na Bateria (Tensão Dividida ~4.4V)
+vbat_int=$((vbat / 10000))
+power_mw=$((vbat_int * ibat_ma / 100))
+
+# Calculo de Potencia da Fonte e Cabo por Protocolo Real
+if [ "$is_charging" = "1" ]; then
+    sign="+"
+    p_label_pt="entregues"
+    p_label_en="delivered"
+    power_w="+$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+
+    if [ "$chg_type" = "3" ]; then
+        # Super Fast Charging PPS (9V, Charge Pump 2:1 ativo)
+        tensao_cabo="~9.0 V (USB-C PPS)"
+        cabo_ma=$((ibat_ma / 2))
+        cabo_label_pt="~$cabo_ma mA (÷2 pelo SP2130)"
+        cabo_label_en="~$cabo_ma mA (÷2 by SP2130)"
+        power_src_mw=$((power_mw * 103 / 100))
+        power_src_w="$((power_src_mw / 1000)).$(((power_src_mw % 1000) / 100))"
+        power_src_desc_pt="Consumo Cabo (9V PPS)"
+        power_src_desc_en="Cable Draw (9V PPS)"
+    elif [ "$chg_type" = "2" ]; then
+        # Fast Charging AFC (9V, Buck)
+        tensao_cabo="9.0 V (AFC 15W)"
+        cabo_ma=$(( (vbat_int * ibat_ma) / 900 ))
+        cabo_label_pt="~$cabo_ma mA (Buck 9V)"
+        cabo_label_en="~$cabo_ma mA (Buck 9V)"
+        power_src_mw=$((power_mw * 118 / 100))
+        power_src_w="$((power_src_mw / 1000)).$(((power_src_mw % 1000) / 100))"
+        power_src_desc_pt="Consumo AFC (9V)"
+        power_src_desc_en="AFC Draw (9V)"
+    else
+        # Carga Padrao / USB do PC (5V, Buck)
+        tensao_cabo="5.0 V (USB PC / Padrão)"
+        cabo_ma=$(( (vbat_int * ibat_ma) / 500 ))
+        cabo_label_pt="~$cabo_ma mA (USB 5V)"
+        cabo_label_en="~$cabo_ma mA (USB 5V)"
+        power_src_mw=$((power_mw * 118 / 100))
+        power_src_w="$((power_src_mw / 1000)).$(((power_src_mw % 1000) / 100))"
+        power_src_desc_pt="Consumo USB (5V)"
+        power_src_desc_en="USB Draw (5V)"
+    fi
+else
+    sign="-"
+    p_label_pt="consumo"
+    p_label_en="consumption"
+    power_w="-$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+    tensao_cabo="0.0 V (Sem Cabo)"
+    cabo_ma=0
+    cabo_label_pt="0 mA (Sem Cabo)"
+    cabo_label_en="0 mA (No Cable)"
+    power_src_w="0.0"
+    power_src_desc_pt="Desconectado"
+    power_src_desc_en="Disconnected"
+fi
+
+# Verificacao do driver no kernel (aw35615_whole)
+if lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
+    [ "$IS_PT" = "1" ] && drv_status="ATIVO (Kprobe Universal @cai0fps)" || drv_status="ACTIVE (Universal Kprobe @cai0fps)"
+else
+    [ "$IS_PT" = "1" ] && drv_status="INATIVO" || drv_status="INACTIVE"
+fi
 
 # Estado do Charge Pump Silergy SP2130
 if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ] && [ "$ibat_ma" -gt 1200 ]; then
@@ -117,11 +150,11 @@ if [ "$IS_PT" = "1" ]; then
     echo " [+] Tensao Célula   : $vbat_v V (Bateria 1S Max 4.45V)"
     echo " [+] Corrente Real   : ${sign}${ibat_ma} mA (Bateria)"
     echo " [+] Potencia Divid. : $power_w W ($p_label_pt)"
-    if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
-        echo " [+] Potencia Fonte  : $power_9v_w W (Escala 9V PPS)"
-        echo " [+] Tensao do Cabo  : ~9.0 V (USB-C VBUS)"
-        echo " [+] Corrente Cabo   : ~$cabo_ma mA (Divisao 2:1)"
-    elif [ "$is_charging" = "0" ]; then
+    if [ "$is_charging" = "1" ]; then
+        echo " [+] Potencia Fonte  : $power_src_w W ($power_src_desc_pt)"
+        echo " [+] Tensao do Cabo  : $tensao_cabo"
+        echo " [+] Corrente Cabo   : $cabo_label_pt"
+    else
         echo " [+] Potencia Fonte  : 0.0 W (Desconectado)"
         echo " [+] Tensao do Cabo  : 0.0 V (Sem Cabo)"
         echo " [+] Corrente Cabo   : 0 mA (Sem Cabo)"
@@ -143,11 +176,11 @@ else
     echo " [+] Cell Voltage    : $vbat_v V (1S Battery Max 4.45V)"
     echo " [+] Real Current    : ${sign}${ibat_ma} mA (Battery)"
     echo " [+] Divided Power   : $power_w W ($p_label_en)"
-    if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
-        echo " [+] Source Power    : $power_9v_w W (9V PPS Scale)"
-        echo " [+] Cable Voltage   : ~9.0 V (USB-C VBUS)"
-        echo " [+] Cable Current   : ~$cabo_ma mA (2:1 Division)"
-    elif [ "$is_charging" = "0" ]; then
+    if [ "$is_charging" = "1" ]; then
+        echo " [+] Source Power    : $power_src_w W ($power_src_desc_en)"
+        echo " [+] Cable Voltage   : $tensao_cabo"
+        echo " [+] Cable Current   : $cabo_label_en"
+    else
         echo " [+] Source Power    : 0.0 W (Disconnected)"
         echo " [+] Cable Voltage   : 0.0 V (No Cable)"
         echo " [+] Cable Current   : 0 mA (No Cable)"
