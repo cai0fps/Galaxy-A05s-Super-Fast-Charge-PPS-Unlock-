@@ -2,7 +2,7 @@ SKIPUNZIP=0
 
 ui_print "=================================================="
 ui_print "   GALAXY A05s — SUPER FAST CHARGE (PPS UNLOCK)   "
-ui_print "            Versao v3.4 Universal                 "
+ui_print "            Versao v3.5 Universal                 "
 ui_print "               por @cai0fps                       "
 ui_print "=================================================="
 ui_print ""

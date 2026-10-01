@@ -1,7 +1,7 @@
 import zipfile
 import os
 
-out_zip = 'Galaxy_A05s_SuperFastCharge_v3.4.zip'
+out_zip = 'Galaxy_A05s_SuperFastCharge_v3.5.zip'
 src_dir = 'module_package'
 
 # Ensure pps_kp_override.ko is in module_package

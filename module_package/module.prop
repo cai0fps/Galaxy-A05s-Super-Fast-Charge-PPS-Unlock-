@@ -1,6 +1,6 @@
 id=galaxy_a05s_pps_unlock
 name=Galaxy A05s Super Fast Charge (PPS Unlock)
-version=v3.4-Universal
-versionCode=340
+version=v3.5-Universal
+versionCode=350
 author=@cai0fps
-description=Desbloqueio universal do USB-PD PPS (25W/Super Fast Charge) no Samsung Galaxy A05s (SM-A057M). Novo seletor interativo com cursor (VOL- navega, VOL+ confirma), Modo ULTRA com bypass térmico e de tela ligada, telemetria KernelSU.
+description=Desbloqueio universal do USB-PD PPS (25W/Super Fast Charge) no Samsung Galaxy A05s (SM-A057M). Seletor dinâmico por cursor (VOL- navega, VOL+ confirma), Modo 3 ULTRA, WebUI com alternância em tempo real e telemetria expandida.
