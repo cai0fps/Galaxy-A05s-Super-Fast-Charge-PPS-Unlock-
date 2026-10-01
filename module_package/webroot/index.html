@@ -78,7 +78,7 @@
         <div class="card">
             <div id="title-power-src" class="card-title">Potência da Fonte</div>
             <div id="val-power-src" class="card-value" style="color: var(--accent-green);">-- W</div>
-            <div id="val-power-src-sub" class="card-sub">Escala 9V PPS (Fonte)</div>
+            <div id="val-power-src-sub" class="card-sub">Tensão da Fonte</div>
         </div>
         <div class="card">
             <div id="title-temp" class="card-title">Temp. Bateria</div>
@@ -213,7 +213,7 @@
                 cardPowerBat: "Potência Dividida",
                 cardPowerBatSub: "Célula (~4.4V × I)",
                 cardPowerSrc: "Potência da Fonte",
-                cardPowerSrcSub: "Escala 9V PPS (Fonte)",
+                cardPowerSrcSub: "Tensão da Fonte",
                 cardTemp: "Temp. Bateria",
                 cardQuiet: "Carcaça",
                 cardCp: "Charge Pump",
@@ -257,7 +257,7 @@
                 cardPowerBat: "Divided Power",
                 cardPowerBatSub: "Cell (~4.4V × I)",
                 cardPowerSrc: "Source Power",
-                cardPowerSrcSub: "9V PPS Scale (Source)",
+                cardPowerSrcSub: "Source Voltage",
                 cardTemp: "Battery Temp",
                 cardQuiet: "Chassis",
                 cardCp: "Charge Pump",
@@ -384,7 +384,7 @@
 
                 const isDischarging = ibat.startsWith("-") || proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
                 const iNum = (ibat !== "--") ? Math.abs(parseInt(ibat, 10)) : 0;
-                const isCpOn = cp.indexOf("LIGADO") !== -1 || cp.indexOf("ON") !== -1;
+                const isCpOn = cp.indexOf("DESLIGADO") === -1 && cp.indexOf("OFF") === -1 && (cp.indexOf("LIGADO") !== -1 || cp.indexOf("ON") !== -1);
                 const isCpMod = cp.indexOf("MODULADO") !== -1 || cp.indexOf("MODULATED") !== -1;
 
                 // Galaxy A05s: O Buck 5V possui teto de 2000mA. Corrente >= 1850mA so e possivel no SP2130 (9V PPS 2:1)
@@ -459,7 +459,7 @@
                 document.getElementById("val-temp").innerText = temp + " °C";
                 document.getElementById("val-quiet").innerText = t.cardQuiet + ": " + quiet + " °C";
                 
-                document.getElementById("val-cp").innerText = (isCpOn || isPPS) ? (currentLang === "pt" ? "LIGADO (2:1)" : "ON (2:1)") : (isCpMod ? (currentLang === "pt" ? "MODULADO" : "MODULATED") : (currentLang === "pt" ? "DESLIGADO" : "OFF"));
+                document.getElementById("val-cp").innerText = isCpOn ? (currentLang === "pt" ? "LIGADO (2:1)" : "ON (2:1)") : (isCpMod ? (currentLang === "pt" ? "MODULADO" : "MODULATED") : (currentLang === "pt" ? "DESLIGADO" : "OFF"));
                 document.getElementById("val-thermal").innerText = t.cardThermal + ": " + cdev;
 
                 const badge = document.getElementById("pps-badge");
