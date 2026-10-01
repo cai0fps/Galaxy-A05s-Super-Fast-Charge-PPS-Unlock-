@@ -192,7 +192,10 @@ Na aba de módulos do KernelSU, toque no botão **"Ação" / "Executar"** para a
 ```
 
 ### 3. WebUI Integrada (`webroot/`)
-Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface gráfica com monitor de potência em tempo real (Watts, Volts, Amperes), bridge Java assíncrona corrigida e alternador de perfil com 1 clique (Normal, Inteligente e ULTRA).
+Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface gráfica com monitor de potência em tempo real (Watts, Volts, Amperes), bridge Java assíncrona corrigida, alternador de perfil com 1 clique (Normal, Inteligente e ULTRA) e o novo botão **"Executar Diagnóstico do Sistema"** com análise de condutividade do cabo USB-C.
+
+### 4. Notificações Nativas do Sistema
+O daemon em segundo plano monitora em tempo real a negociação USB-PD e emite um alerta nativo no Android assim que o protocolo PPS 9V e o Charge Pump SP2130 são engatados na tomada.
 
 ---
 
@@ -202,12 +205,13 @@ Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface 
 Galaxy_A05s_SuperFastCharge_v1.6.zip
 ├── module.prop                  # Metadados e versão do módulo v1.6
 ├── customize.sh                 # Novo menu com cursor interativo via botões de volume
-├── service.sh                   # Daemon de boot, bypass térmico/tela e arrefecimento
-├── action.sh                    # Script do botão "Ação" do KernelSU
+├── service.sh                   # Daemon de boot, bypass térmico/tela, arrefecimento e notificações
+├── action.sh                    # Script do botão "Ação" do KernelSU com telemetria
+├── diag.sh                      # Ferramenta de diagnóstico de hardware e qualidade do cabo
 ├── config.prop                  # Perfil ativo selecionado pelo usuário
 ├── pps_kp_override.ko           # Driver assinado com kprobes universais
 ├── webroot/
-│   └── index.html               # Dashboard WebUI para KernelSU Next (Bridge corrigida)
+│   └── index.html               # Dashboard WebUI para KernelSU Next (Diagnóstico + Watts)
 └── META-INF/
     └── com/google/android/
         ├── update-binary        # Entrypoint do instalador

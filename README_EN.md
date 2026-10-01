@@ -196,8 +196,11 @@ In KernelSU module list, click **"Action" / "Execute"** to view real-time diagno
 For KernelSU Next users, the WebUI provides:
 * Real-time power metrics (Watts, Volts, Amperes, Temperatures, Charge Pump state).
 * One-tap instant profile switcher (Normal, Smart, ULTRA) with dynamic hardware reload.
-* Full-height live kernel log terminal without internal scrolling.
+* Built-in **"Run System Diagnostic"** button testing I2C bus `0x6d` and USB-C cable quality.
 * Automatic English/Portuguese detection + `[🌐 PT / EN]` manual language toggle.
+
+### 4. Native System Notifications
+The background daemon dynamically monitors USB-PD negotiations and dispatches an Android notification whenever 25W PPS (9V) mode and the SP2130 Charge Pump are engaged.
 
 ---
 
@@ -207,12 +210,13 @@ For KernelSU Next users, the WebUI provides:
 Galaxy_A05s_SuperFastCharge_v1.6.zip
 ├── module.prop                  # Module metadata (v1.6 Universal)
 ├── customize.sh                 # Interactive volume cursor installer (bilingual)
-├── service.sh                   # Boot daemon, dynamic config reload & thermal bypass
+├── service.sh                   # Boot daemon, dynamic config reload, thermal bypass & notifications
 ├── action.sh                    # KernelSU "Action" telemetry script (bilingual)
+├── diag.sh                      # Hardware and cable quality diagnostic tool (bilingual)
 ├── config.prop                  # Active user profile configuration
 ├── pps_kp_override.ko           # Signed universal kprobe kernel driver
 ├── webroot/
-│   └── index.html               # WebUI dashboard with bilingual toggle and full log
+│   └── index.html               # WebUI dashboard with diagnostic & Watts calculation
 └── META-INF/
     └── com/google/android/
         ├── update-binary        # Installer entrypoint
