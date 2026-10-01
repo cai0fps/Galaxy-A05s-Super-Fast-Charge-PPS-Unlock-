@@ -58,6 +58,9 @@ BIG_ULTRA_COOL=825600
 is_capped=0
 
 while true; do
+    # Recarregar configuracao do usuario dinamicamente (para mudancas em tempo real via WebUI)
+    [ -f "$CONFIG" ] && . "$CONFIG"
+
     # Sempre manter o modo vitrine / 300mA desligado
     echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null
     
@@ -110,6 +113,11 @@ while true; do
                 echo $BIG_COOL > "$BIG_MAX" 2>/dev/null
                 is_capped=1
             fi
+        elif [ "$COOLING_PRIORITY" = "0" ] && [ "$is_capped" = "1" ]; then
+            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+            echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
+            echo $BIG_DEFAULT > "$BIG_MAX" 2>/dev/null
+            is_capped=0
         fi
     else
         # Tela ligada ou fora da tomada: restaurar frequencias normais de CPU

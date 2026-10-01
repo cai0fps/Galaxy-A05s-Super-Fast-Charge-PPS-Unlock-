@@ -87,12 +87,12 @@
         </button>
     </div>
 
-    <div style="margin-top: 10px; margin-bottom: 18px; padding: 10px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; font-size: 0.72rem; color: #fca5a5; line-height: 1.4;">
-        ⚠️ <strong>Termo de Responsabilidade & Consentimento:</strong> O uso deste módulo como um todo e em qualquer perfil é estritamente experimental. O usuário declara pleno consentimento e assume 100% da responsabilidade por quaisquer problemas, danos materiais ou desgaste do aparelho. O desenvolvedor <strong>@cai0fps</strong> isenta-se expressamente de quaisquer danos ou problemas decorrentes do uso.
-    </div>
-
     <div class="section-title">Registro ao Vivo do Kernel</div>
     <div id="log-box" class="terminal-card">Iniciando conexao com KernelSU...</div>
+
+    <div style="margin-top: 18px; margin-bottom: 24px; padding: 12px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; font-size: 0.72rem; color: #fca5a5; line-height: 1.4;">
+        ⚠️ <strong>Termo de Responsabilidade & Consentimento:</strong> O uso deste módulo como um todo e em qualquer perfil é estritamente experimental. O usuário declara pleno consentimento e assume 100% da responsabilidade por quaisquer problemas, danos materiais ou desgaste do aparelho. O desenvolvedor <strong>@cai0fps</strong> isenta-se expressamente de quaisquer danos ou problemas decorrentes do uso.
+    </div>
 
     <script>
         function getUniqueCallbackName(prefix) {
@@ -246,6 +246,11 @@
             }
             const cfg = `PROFILE=${prof}\\nMAX_PERCENT=100\\nCOOLING_PRIORITY=${cooling}\\nBYPASS_THERMAL=${bypassThermal}\\nSCREEN_ON_BYPASS=${screenBypass}\\nFORCE_SFC=1\\n`;
             await exec(`echo "${cfg}" > /data/adb/modules/galaxy_a05s_pps_unlock/config.prop`);
+            if (prof === "ULTRA") {
+                await exec("echo 0 > /sys/class/thermal/cooling_device26/cur_state 2>/dev/null; echo 0 > /sys/class/thermal/cooling_device27/cur_state 2>/dev/null; echo 100 > /sys/class/power_supply/battery/siop_level 2>/dev/null; echo 3300000 > /sys/class/power_supply/battery/current_max 2>/dev/null; echo 3300000 > /sys/class/power_supply/battery/input_current_limit 2>/dev/null");
+            } else if (prof === "NORMAL") {
+                await exec("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null; cat /sys/devices/system/cpu/cpu4/cpufreq/cpuinfo_max_freq > /sys/devices/system/cpu/cpu4/cpufreq/scaling_max_freq 2>/dev/null");
+            }
             const k = (typeof ksu !== "undefined") ? ksu : (window.ksu || null);
             if (k && k.toast) {
                 k.toast("Perfil atualizado: " + prof + " (100%)");
@@ -253,7 +258,7 @@
                 alert("Perfil atualizado para " + prof + " (100%)!");
             }
             highlightActive(prof);
-            updateData();
+            await updateData();
         }
 
         async function checkCurrentProfile() {
