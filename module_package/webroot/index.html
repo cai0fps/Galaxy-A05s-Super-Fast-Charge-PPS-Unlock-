@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A05s Super Fast Charge</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-border: #334155;
+            --accent: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .badge-active { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .badge-warn { background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; }
+        .card-title { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
+        .card-value { font-size: 1.4rem; font-weight: 700; }
+        .card-sub { font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; }
+
+        .section-title { font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; margin: 16px 0 8px 0; font-weight: 600; }
+        .btn-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        button { background: var(--card); border: 1px solid var(--card-border); color: var(--text); padding: 12px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; text-align: left; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        button:active { transform: scale(0.98); }
+        button.active { border-color: var(--accent); background: rgba(56, 189, 248, 0.15); }
+
+        .terminal-card { background: #000; border: 1px solid #222; border-radius: 10px; padding: 12px; font-family: monospace; font-size: 0.75rem; color: #10b981; max-height: 180px; overflow-y: auto; line-height: 1.4; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Galaxy A05s</h1>
+            <div style="font-size: 0.75rem; color: var(--text-dim);">Super Fast Charge 25W (@cai0fps)</div>
+        </div>
+        <span id="pps-badge" class="badge badge-warn">Verificando...</span>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <div class="card-title">Bateria</div>
+            <div id="val-soc" class="card-value">-- %</div>
+            <div id="val-vbat" class="card-sub">-- V</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Corrente Real</div>
+            <div id="val-ibat" class="card-value" style="color: var(--accent-green);">-- mA</div>
+            <div id="val-power" class="card-sub">-- W entregues</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Temp. Bateria</div>
+            <div id="val-temp" class="card-value">-- °C</div>
+            <div id="val-quiet" class="card-sub">Carcaça: -- °C</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Charge Pump</div>
+            <div id="val-cp" class="card-value">--</div>
+            <div id="val-thermal" class="card-sub">Nível Térmico: --</div>
+        </div>
+    </div>
+
+    <div class="section-title">Perfil de Carregamento (Alvo: 100%)</div>
+    <div class="btn-group">
+        <button id="btn-normal" onclick="setProfile('NORMAL', 0)">
+            <span>Modo 1: Normal (100%)</span>
+            <span style="font-size: 0.7rem; color: var(--text-dim);">PPS Direto</span>
+        </button>
+        <button id="btn-smart" onclick="setProfile('SMART', 1)">
+            <span>Modo 2: Inteligente (100%)</span>
+            <span style="font-size: 0.7rem; color: var(--accent);">Arrefecimento Ativo</span>
+        </button>
+    </div>
+
+    <div class="section-title">Registro ao Vivo do Kernel</div>
+    <div id="log-box" class="terminal-card">Iniciando conexao com KernelSU...</div>
+
+    <script>
+        function getUniqueCallbackName(prefix) {
+            return prefix + "_" + Math.random().toString(36).substr(2, 9);
+        }
+
+        function exec(command) {
+            return new Promise((resolve) => {
+                const k = (typeof ksu !== "undefined") ? ksu : (window.ksu || null);
+                if (!k || !k.exec) {
+                    resolve({ errno: -1, stdout: "", stderr: "Interface KernelSU/MMRL nao detectada" });
+                    return;
+                }
+
+                const cbName = getUniqueCallbackName("ksu_exec");
+                let done = false;
+
+                const timer = setTimeout(() => {
+                    if (!done) {
+                        done = true;
+                        try { delete window[cbName]; } catch (e) {}
+                        resolve({ errno: -1, stdout: "", stderr: "Timeout ao executar comando" });
+                    }
+                }, 4000);
+
+                window[cbName] = (errno, stdout, stderr) => {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    try { delete window[cbName]; } catch (e) {}
+                    resolve({ errno: errno || 0, stdout: (stdout || "").trim(), stderr: stderr || "" });
+                };
+
+                try {
+                    const ret = k.exec(command, "{}", cbName);
+                    if (ret && typeof ret.then === "function") {
+                        ret.then((res) => {
+                            if (done) return;
+                            done = true;
+                            clearTimeout(timer);
+                            try { delete window[cbName]; } catch (e) {}
+                            if (res) {
+                                resolve({ errno: res.errno || 0, stdout: (res.stdout || "").trim(), stderr: res.stderr || "" });
+                            }
+                        }).catch((err) => {
+                            if (done) return;
+                            done = true;
+                            clearTimeout(timer);
+                            try { delete window[cbName]; } catch (e) {}
+                            resolve({ errno: -1, stdout: "", stderr: String(err) });
+                        });
+                    }
+                } catch (error) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    try { delete window[cbName]; } catch (e) {}
+                    resolve({ errno: -1, stdout: "", stderr: String(error) });
+                }
+            });
+        }
+
+        async function updateData() {
+            try {
+                const res = await exec("sh /data/adb/modules/galaxy_a05s_pps_unlock/action.sh");
+                const logBox = document.getElementById("log-box");
+                
+                if (res.stderr && !res.stdout) {
+                    logBox.innerText = "Erro ao ler telemetria: " + res.stderr;
+                    return;
+                }
+                
+                if (!res.stdout) {
+                    logBox.innerText = "Aguardando resposta do subsistema de bateria...";
+                    return;
+                }
+
+                logBox.innerText = res.stdout;
+                const lines = res.stdout.split("\n");
+                
+                let soc = "--", vbat = "--", ibat = "--", temp = "--", quiet = "--", cdev = "--", proto = "", cp = "";
+
+                for (let i = 0; i < lines.length; i++) {
+                    const l = lines[i];
+                    if (l.indexOf("Nivel Bateria") !== -1) {
+                        const m = l.match(/:\s*(\d+)%/);
+                        if (m) soc = m[1];
+                    } else if (l.indexOf("Tensao Bateria") !== -1) {
+                        const m = l.match(/:\s*([\d.]+)\s*V/);
+                        if (m) vbat = m[1];
+                    } else if (l.indexOf("Corrente Real") !== -1) {
+                        const m = l.match(/:\s*([+-]?\d+)\s*mA/);
+                        if (m) ibat = m[1];
+                    } else if (l.indexOf("Temp. Bateria") !== -1) {
+                        const m = l.match(/:\s*([\d.]+)\s*C/);
+                        if (m) temp = m[1];
+                    } else if (l.indexOf("Temp. Carcaca") !== -1) {
+                        const m = l.match(/:\s*([\d.]+)\s*C/);
+                        if (m) quiet = m[1];
+                    } else if (l.indexOf("Thermal Level") !== -1) {
+                        const m = l.match(/:\s*(\d+)/);
+                        if (m) cdev = m[1];
+                    } else if (l.indexOf("Protocolo USB") !== -1) {
+                        proto = l.split(":").slice(1).join(":").trim();
+                    } else if (l.indexOf("Charge Pump") !== -1) {
+                        cp = l.split(":").slice(1).join(":").trim();
+                    }
+                }
+
+                document.getElementById("val-soc").innerText = soc + " %";
+                document.getElementById("val-vbat").innerText = vbat + " V";
+                document.getElementById("val-ibat").innerText = ibat + " mA";
+
+                if (vbat !== "--" && ibat !== "--") {
+                    const vNum = parseFloat(vbat);
+                    const iNum = Math.abs(parseInt(ibat, 10));
+                    if (!isNaN(vNum) && !isNaN(iNum)) {
+                        const watts = (vNum * iNum / 1000).toFixed(1);
+                        document.getElementById("val-power").innerText = watts + " W entregues";
+                    }
+                }
+
+                document.getElementById("val-temp").innerText = temp + " °C";
+                document.getElementById("val-quiet").innerText = "Carcaça: " + quiet + " °C";
+                document.getElementById("val-cp").innerText = cp.indexOf("LIGADO") !== -1 ? "LIGADO (2:1)" : (cp.indexOf("MODULADO") !== -1 ? "MODULADO" : "DESLIGADO");
+                document.getElementById("val-thermal").innerText = "Nível Térmico: " + cdev;
+
+                const badge = document.getElementById("pps-badge");
+                if (proto.indexOf("PPS") !== -1) {
+                    badge.innerText = "PPS ATIVO (25W)";
+                    badge.className = "badge badge-active";
+                } else if (proto.indexOf("FAST") !== -1) {
+                    badge.innerText = "AFC 15W";
+                    badge.className = "badge badge-warn";
+                } else if (proto.indexOf("PADRAO") !== -1 || proto.indexOf("CARREGANDO") !== -1) {
+                    badge.innerText = "5V PADRÃO";
+                    badge.className = "badge badge-warn";
+                } else {
+                    badge.innerText = "EM BATERIA";
+                    badge.className = "badge badge-warn";
+                }
+            } catch (err) {
+                document.getElementById("log-box").innerText = "Falha no script: " + err.message;
+            }
+        }
+
+        async function setProfile(prof, cooling) {
+            const cfg = `PROFILE=${prof}\\nMAX_PERCENT=100\\nCOOLING_PRIORITY=${cooling}\\nFORCE_SFC=1\\n`;
+            await exec(`echo "${cfg}" > /data/adb/modules/galaxy_a05s_pps_unlock/config.prop`);
+            const k = (typeof ksu !== "undefined") ? ksu : (window.ksu || null);
+            if (k && k.toast) {
+                k.toast("Perfil atualizado: " + prof + " (100%)");
+            } else {
+                alert("Perfil atualizado para " + prof + " (100%)!");
+            }
+            highlightActive(prof);
+            updateData();
+        }
+
+        async function checkCurrentProfile() {
+            const { stdout } = await exec("cat /data/adb/modules/galaxy_a05s_pps_unlock/config.prop 2>/dev/null");
+            if (stdout && stdout.indexOf("PROFILE=NORMAL") !== -1) {
+                highlightActive("NORMAL");
+            } else {
+                highlightActive("SMART");
+            }
+        }
+
+        function highlightActive(prof) {
+            document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+            if (prof === "NORMAL") {
+                const btn = document.getElementById("btn-normal");
+                if (btn) btn.classList.add("active");
+            } else {
+                const btn = document.getElementById("btn-smart");
+                if (btn) btn.classList.add("active");
+            }
+        }
+
+        checkCurrentProfile();
+        updateData();
+        setInterval(updateData, 2000);
+    </script>
+</body>
+</html>

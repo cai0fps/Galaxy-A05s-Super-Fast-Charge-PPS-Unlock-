@@ -1,0 +1,5 @@
+# Configuracao do Modulo Super Fast Charge A05s por @cai0fps
+PROFILE=SMART
+MAX_PERCENT=100
+COOLING_PRIORITY=1
+FORCE_SFC=1

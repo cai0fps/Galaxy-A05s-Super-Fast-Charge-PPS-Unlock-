@@ -1,0 +1,10 @@
+# Ignore everything by default
+*
+
+# Allow necessary directory structure
+!/module_package/
+!/module_package/**
+!/.gitignore
+!/README.md
+!/Galaxy_A05s_SuperFastCharge_v3.3.zip
+!/build_kprobe_override.py
