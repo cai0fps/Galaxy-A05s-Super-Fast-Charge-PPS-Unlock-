@@ -1,5 +1,7 @@
 # Galaxy A05s — Super Fast Charge (USB-PD PPS Unlock)
 
+🌐 **[English Version](README_EN.md)** | **[Versão em Português](README.md)**
+
 > **Autor e Desenvolvedor:** [@cai0fps](https://github.com/cai0fps)  
 > **Dispositivo Alvo:** Samsung Galaxy A05s (`SM-A057M` / `SM-A057F` / `SM-A057G`)  
 > **Plataforma:** Qualcomm Snapdragon 680 4G (`SM6225` / `bengal`)  
