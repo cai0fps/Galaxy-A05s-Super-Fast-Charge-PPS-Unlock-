@@ -199,8 +199,8 @@ Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface 
 ## 📁 Estrutura de Arquivos
 
 ```
-Galaxy_A05s_SuperFastCharge_v3.5.zip
-├── module.prop                  # Metadados e versão do módulo v3.5
+Galaxy_A05s_SuperFastCharge_v1.6.zip
+├── module.prop                  # Metadados e versão do módulo v1.6
 ├── customize.sh                 # Novo menu com cursor interativo via botões de volume
 ├── service.sh                   # Daemon de boot, bypass térmico/tela e arrefecimento
 ├── action.sh                    # Script do botão "Ação" do KernelSU

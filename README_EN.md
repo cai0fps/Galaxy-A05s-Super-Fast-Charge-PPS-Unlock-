@@ -204,8 +204,8 @@ For KernelSU Next users, the WebUI provides:
 ## 📁 File Structure
 
 ```
-Galaxy_A05s_SuperFastCharge_v3.5.zip
-├── module.prop                  # Module metadata (v3.5 Universal)
+Galaxy_A05s_SuperFastCharge_v1.6.zip
+├── module.prop                  # Module metadata (v1.6 Universal)
 ├── customize.sh                 # Interactive volume cursor installer (bilingual)
 ├── service.sh                   # Boot daemon, dynamic config reload & thermal bypass
 ├── action.sh                    # KernelSU "Action" telemetry script (bilingual)
