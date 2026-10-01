@@ -43,10 +43,15 @@ ibat_ma="$(( ibat_abs / 1000 ))"
 temp_c="$((temp / 10)).$((temp % 10))"
 quiet_c="$((quiet_t / 1000)).$(((quiet_t % 1000) / 100))"
 
-# Potencia instantanea em Watts
+# Potencia instantanea na Bateria (Tensão Dividida ~4.4V)
 vbat_int=$((vbat / 10000))
 power_mw=$((vbat_int * ibat_ma / 100))
 power_w="$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+
+# Potencia na escala de 9V do Carregador PPS (Fonte / Cabo)
+power_9v_mw=$((9 * ibat_ma))
+power_9v_w="$((power_9v_mw / 1000)).$(((power_9v_mw % 1000) / 100))"
+cabo_ma=$((ibat_ma / 2))
 
 # Verificacao do driver no kernel (aw35615_whole)
 if lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
@@ -86,9 +91,14 @@ if [ "$IS_PT" = "1" ]; then
     echo " [+] Protocolo USB   : $pps_status"
     echo " [+] Charge Pump     : $cp_state"
     echo " [+] Nivel Bateria   : $soc% (Alvo: 100%)"
-    echo " [+] Tensao Bateria  : $vbat_v V"
-    echo " [+] Corrente Real   : +$ibat_ma mA"
-    echo " [+] Potencia Real   : $power_w W entregues"
+    echo " [+] Tensao Célula   : $vbat_v V (Bateria 1S Max 4.45V)"
+    echo " [+] Corrente Real   : +$ibat_ma mA (Bateria)"
+    echo " [+] Potencia Divid. : $power_w W (Entregue na Bateria)"
+    if [ "$chg_type" = "3" ]; then
+        echo " [+] Potencia Fonte  : $power_9v_w W (Escala 9V PPS)"
+        echo " [+] Tensao do Cabo  : ~9.0 V (USB-C VBUS)"
+        echo " [+] Corrente Cabo   : ~$cabo_ma mA (Divisao 2:1)"
+    fi
     echo " [+] Temp. Bateria   : $temp_c C"
     echo " [+] Temp. Carcaca   : $quiet_c C (quiet-therm)"
     echo " [+] Nivel Termico   : $cdev26 (0 = Plena Potencia)"
@@ -103,9 +113,14 @@ else
     echo " [+] USB Protocol    : $pps_status"
     echo " [+] Charge Pump     : $cp_state"
     echo " [+] Battery Level   : $soc% (Target: 100%)"
-    echo " [+] Battery Voltage : $vbat_v V"
-    echo " [+] Real Current    : +$ibat_ma mA"
-    echo " [+] Real Power      : $power_w W delivered"
+    echo " [+] Cell Voltage    : $vbat_v V (1S Battery Max 4.45V)"
+    echo " [+] Real Current    : +$ibat_ma mA (Battery)"
+    echo " [+] Divided Power   : $power_w W (Delivered to Cell)"
+    if [ "$chg_type" = "3" ]; then
+        echo " [+] Source Power    : $power_9v_w W (9V PPS Scale)"
+        echo " [+] Cable Voltage   : ~9.0 V (USB-C VBUS)"
+        echo " [+] Cable Current   : ~$cabo_ma mA (2:1 Division)"
+    fi
     echo " [+] Battery Temp    : $temp_c C"
     echo " [+] Chassis Temp    : $quiet_c C (quiet-therm)"
     echo " [+] Thermal Level   : $cdev26 (0 = Full Power)"

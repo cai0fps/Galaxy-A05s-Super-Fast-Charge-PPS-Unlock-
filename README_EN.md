@@ -101,6 +101,33 @@ During hardware validation with a 20W wall charger (APDO `3300–11000 mV @ 1800
 
 ---
 
+## ⚡ Physics of 25W PPS & The Watts Calculation
+
+Many users notice telemetry showing ~4.4V and wonder: *"Where is the 9V from the charger? Why does power show ~12W instead of 25W?"*. Here is the physical hardware explanation:
+
+### 1. Battery Cell Voltage (4.4V) vs USB Cable Voltage (9.0V)
+* **1S Lithium-Ion Battery**: The physical battery cell operates strictly between **3.4V (0%)** and **4.40V to 4.45V (100%)**. **A 1S battery can never receive more than 4.45V directly**, as exceeding this threshold results in immediate thermal runaway.
+* **Charger Voltage (VBUS)**: The **~9.0V to 9.7V** negotiated over PPS runs **exclusively inside the USB-C cable**, transmitting more power with lower cable current to prevent cable heating.
+
+### 2. The 2:1 Divider (Silergy SP2130 Charge Pump)
+* The dedicated **Silergy SP2130** acts as a switched-capacitor converter with ~97% efficiency in a **2:1 ratio**:
+  $$\text{Battery Voltage } (V_{bat}) = \frac{V_{bus}}{2} \approx \frac{9.0\text{V}}{2} = 4.5\text{V}$$
+  $$\text{Battery Current } (I_{bat}) = 2 \times I_{bus} \approx 2 \times 1.4\text{A} = 2.8\text{A}$$
+* It divides the incoming voltage by 2 and **doubles the current**, feeding ultra-fast charge directly into the cell with virtually no heat generation.
+
+### 3. Watts Math: Divided vs Source Power
+* **Divided Power (Real Battery Power)**:
+  $$P_{bat} = V_{bat} \times I_{bat} = 4.4\text{V} \times 2.8\text{A} \approx \mathbf{12.3\text{ W}}$$
+  This is the net chemical energy being accumulated inside the battery cell at 4.4V.
+* **Source Power (Nominal 9V PPS Scale)**:
+  $$P_{source} = 9.0\text{V} \times I_{bat} = 9.0\text{V} \times 2.8\text{A} \approx \mathbf{25.2\text{ W}}$$
+  This is the nominal calculation corresponding to the charger's 25W specification.
+* **USB Cable Power Draw**:
+  $$P_{cable} = V_{bus} \times I_{bus} = 9.0\text{V} \times 1.4\text{A} \approx \mathbf{12.6\text{ W}}$$
+  The charger feeds 12.6W into the cable, and the SP2130 delivers ~12.3W to the cell (97.6% efficiency).
+
+---
+
 ## 🌡️ Thermal Throttling & Dynamic Cooldown Engine
 
 Analysis of Qualcomm's thermal daemon configuration (`/vendor/etc/thermal-engine.conf`) revealed the chassis skin mitigation rules:

@@ -101,6 +101,33 @@ Durante a validação prática com carregador de 20W (APDO `3300–11000 mV @ 18
 
 ---
 
+## ⚡ Entenda a Física do PPS 25W e a Conta dos Watts
+
+Muitos usuários se deparam com medições de ~4.4V no aplicativo e perguntam: *"Cadê os 9V do carregador? Por que a potência mostra ~12W e não 25W?"*. Aqui está a explicação da arquitetura de hardware:
+
+### 1. Tensão da Bateria (4.4V) vs Tensão do Cabo (9.0V)
+* **Bateria 1S de Íon de Lítio**: A célula física da bateria opera estritamente entre **3.4V (0%)** e **4.40V a 4.45V (100%)**. **Nenhuma bateria 1S pode receber mais de 4.45V diretamente**, sob risco imediato de colapso térmico e explosão.
+* **Tensão do Carregador (VBUS)**: Os **~9.0V a 9.7V** do protocolo PPS circulam **exclusivamente pelo cabo USB-C**, permitindo transmitir mais energia com corrente menor para evitar aquecimento da fiação.
+
+### 2. O Divisor 2:1 (Silergy SP2130 Charge Pump)
+* O chip dedicado **Silergy SP2130** atua como um conversor comutado de capacitores de ~97% de eficiência na razão **2:1**:
+  $$\text{Tensão na Bateria } (V_{bat}) = \frac{V_{bus}}{2} \approx \frac{9.0\text{V}}{2} = 4.5\text{V}$$
+  $$\text{Corrente na Bateria } (I_{bat}) = 2 \times I_{bus} \approx 2 \times 1.4\text{A} = 2.8\text{A}$$
+* Ele divide a tensão ao meio e **dobra a corrente**, garantindo que a célula receba carga ultrarrápida quase sem perdas térmicas.
+
+### 3. A Conta dos Watts: Dividida vs Fonte
+* **Potência Dividida (Real na Bateria)**:
+  $$P_{bat} = V_{bat} \times I_{bat} = 4.4\text{V} \times 2.8\text{A} \approx \mathbf{12.3\text{ W}}$$
+  É a energia líquida em Watts sendo quimicamente acumulada na célula.
+* **Potência da Fonte (Escala Nominal 9V PPS)**:
+  $$P_{fonte} = 9.0\text{V} \times I_{bat} = 9.0\text{V} \times 2.8\text{A} \approx \mathbf{25.2\text{ W}}$$
+  É a conta equivalente à especificação nominal de 25W do carregador.
+* **Potência Consumida no Cabo USB**:
+  $$P_{cabo} = V_{bus} \times I_{bus} = 9.0\text{V} \times 1.4\text{A} \approx \mathbf{12.6\text{ W}}$$
+  O carregador injeta 12.6W no cabo, e o SP2130 entrega ~12.3W na célula (97.6% de rendimento).
+
+---
+
 ## 🌡️ Mapeamento Térmico e Algoritmo de Arrefecimento
 
 Descobrimos no arquivo de configuração do daemon térmico da Qualcomm (`/vendor/etc/thermal-engine.conf`) a regra de atenuação de corrente da bateria:
