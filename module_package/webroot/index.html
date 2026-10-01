@@ -108,6 +108,21 @@
         </button>
     </div>
 
+    <div id="title-section-diag" class="section-title">Diagnóstico de Hardware & Cabo</div>
+    <div style="margin-bottom: 20px;">
+        <button id="btn-run-diag" onclick="runDiagnostic()" style="width: 100%; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); display: flex; justify-content: space-between; align-items: center; padding: 13px 16px;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.1rem;">🔍</span>
+                <span id="txt-diag-btn" style="color: var(--accent); font-weight: 700;">Executar Diagnóstico do Sistema</span>
+            </span>
+            <span id="txt-diag-hint" style="font-size: 0.72rem; color: var(--text-dim);">Testar Cabo & SP2130</span>
+        </button>
+        <div id="diag-container" style="display: none; margin-top: 10px; background: #000; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.73rem; color: #38bdf8; line-height: 1.45; white-space: pre-wrap; word-break: break-word;">
+            <div id="diag-loading" style="color: var(--text-dim);">Avaliando barramento I2C, kprobe e condutividade do cabo...</div>
+            <div id="diag-content"></div>
+        </div>
+    </div>
+
     <div id="title-section-log" class="section-title">Registro ao Vivo do Kernel</div>
     <div id="log-box" class="terminal-card">Iniciando conexao com KernelSU...</div>
 
@@ -210,6 +225,11 @@
                 btnSmart2: "Arrefecimento Ativo",
                 btnUltra1: "Modo 3: ULTRA / Máxima Potência",
                 btnUltra2: "25W Forçado + Bypass Térmico",
+                secDiag: "Diagnóstico de Hardware & Cabo",
+                diagBtn: "Executar Diagnóstico do Sistema",
+                diagHint: "Testar Cabo & SP2130",
+                diagRunning: "⏳ Coletando dados do I2C, kprobe, PDOs e medindo condutividade do cabo...",
+                diagFinished: "Concluído",
                 secLog: "Registro ao Vivo do Kernel",
                 aboutTitle: "ℹ️ Sobre o PPS 25W & A Conta dos Watts",
                 aboutBody: `
@@ -249,6 +269,11 @@
                 btnSmart2: "Active Cooldown",
                 btnUltra1: "Mode 3: ULTRA / Max Power",
                 btnUltra2: "25W Forced + Thermal Bypass",
+                secDiag: "Hardware & Cable Diagnostic",
+                diagBtn: "Run System Diagnostic",
+                diagHint: "Test Cable & SP2130",
+                diagRunning: "⏳ Collecting I2C, kprobe, PDO data and measuring cable conductivity...",
+                diagFinished: "Finished",
                 secLog: "Live Kernel Log",
                 aboutTitle: "ℹ️ About 25W PPS & Watts Math",
                 aboutBody: `
@@ -280,6 +305,14 @@
             document.getElementById("title-temp").innerText = t.cardTemp;
             document.getElementById("title-cp").innerText = t.cardCp;
             document.getElementById("title-section-profile").innerText = t.secProfile;
+            
+            const secDiag = document.getElementById("title-section-diag");
+            if (secDiag) secDiag.innerText = t.secDiag;
+            const txtDiagBtn = document.getElementById("txt-diag-btn");
+            if (txtDiagBtn) txtDiagBtn.innerText = t.diagBtn;
+            const txtDiagHint = document.getElementById("txt-diag-hint");
+            if (txtDiagHint) txtDiagHint.innerText = t.diagHint;
+
             document.getElementById("title-section-log").innerText = t.secLog;
             
             document.getElementById("btn-normal-title").innerText = t.btnNormal1;
@@ -445,6 +478,37 @@
                 }
             } catch (err) {
                 document.getElementById("log-box").innerText = "Error: " + err.message;
+            }
+        }
+
+        async function runDiagnostic() {
+            const t = i18n[currentLang] || i18n.en;
+            const container = document.getElementById("diag-container");
+            const content = document.getElementById("diag-content");
+            const loading = document.getElementById("diag-loading");
+            const btnHint = document.getElementById("txt-diag-hint");
+
+            container.style.display = "block";
+            loading.style.display = "block";
+            content.innerText = "";
+            loading.innerText = t.diagRunning;
+            if (btnHint) btnHint.innerText = (currentLang === "pt") ? "Testando..." : "Testing...";
+
+            try {
+                const langArg = currentLang === "pt" ? "pt" : "en";
+                const res = await exec(`sh /data/adb/modules/galaxy_a05s_pps_unlock/diag.sh ${langArg}`);
+                loading.style.display = "none";
+                if (btnHint) btnHint.innerText = t.diagFinished;
+                if (res.stdout) {
+                    content.innerText = res.stdout;
+                } else if (res.stderr) {
+                    content.innerText = "Erro: " + res.stderr;
+                } else {
+                    content.innerText = (currentLang === "pt") ? "Diagnóstico concluído sem dados." : "Diagnostic finished without data.";
+                }
+            } catch (err) {
+                loading.style.display = "none";
+                content.innerText = "Erro: " + err.message;
             }
         }
 

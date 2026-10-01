@@ -56,6 +56,7 @@ BIG_ULTRA_COOL=825600
 # Daemon em Segundo Plano
 (
 is_capped=0
+pps_notified=0
 
 while true; do
     # Recarregar configuracao do usuario dinamicamente (para mudancas em tempo real via WebUI)
@@ -127,6 +128,43 @@ while true; do
             echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
             echo $BIG_DEFAULT > "$BIG_MAX" 2>/dev/null
             is_capped=0
+        fi
+    fi
+
+    # ========================================================
+    # NOTIFICACAO NATIVA DO SISTEMA AO ENGATAR PPS 25W
+    # ========================================================
+    is_pps_active=0
+    if [ "$ac_online" = "1" ]; then
+        dc_now=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
+        cp_st=$(cat /sys/class/power_supply/charger_standalone/status 2>/dev/null || echo "")
+        ib_ua=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || echo 0)
+        ib_abs=$(( ib_ua < 0 ? -ib_ua : ib_ua ))
+
+        if [ "$dc_now" != "0" ] || [ "$cp_st" = "Charging" ] || [ "$ib_abs" -ge 1850000 ]; then
+            is_pps_active=1
+        fi
+    fi
+
+    if [ "$is_pps_active" = "1" ]; then
+        if [ "$pps_notified" = "0" ]; then
+            sys_locale=$(getprop persist.sys.locale 2>/dev/null || echo "pt-BR")
+            if echo "$sys_locale" | grep -qi "pt"; then
+                n_title="⚡ Super Fast Charging 25W"
+                n_msg="PPS 9V Ativo! Charge Pump SP2130 (2:1) engatado com sucesso."
+            else
+                n_title="⚡ Super Fast Charging 25W"
+                n_msg="9V PPS Active! Silergy SP2130 Charge Pump (2:1) engaged."
+            fi
+            cmd notification post -S bigtext -t "$n_title" "pps_unlock_notif" "$n_msg" >/dev/null 2>&1
+            pps_notified=1
+        fi
+    else
+        if [ "$ac_online" = "0" ]; then
+            if [ "$pps_notified" = "1" ]; then
+                cmd notification cancel "pps_unlock_notif" >/dev/null 2>&1
+                pps_notified=0
+            fi
         fi
     fi
     

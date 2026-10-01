@@ -240,4 +240,5 @@ fi
 # Permissoes de execucao
 chmod 755 "$MODPATH/service.sh"
 chmod 755 "$MODPATH/action.sh" 2>/dev/null
+chmod 755 "$MODPATH/diag.sh" 2>/dev/null
 chmod 644 "$MODPATH/pps_kp_override.ko" 2>/dev/null
