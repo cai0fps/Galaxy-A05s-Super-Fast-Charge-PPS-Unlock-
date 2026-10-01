@@ -75,21 +75,15 @@ while true; do
     fi
     
     # ========================================================
-    # MODO 3 (ULTRA): BYPASS TERMICO & TELA LIGADA
+    # MODO 3 (ULTRA): BYPASS TERMICO
     # ========================================================
     if [ "$PROFILE" = "ULTRA" ] || [ "$BYPASS_THERMAL" = "1" ]; then
         if [ "$ac_online" = "1" ]; then
-            # 1. Desarmar thermal throttling da bateria no thermal-engine Qualcomm
-            echo 0 > /sys/class/thermal/cooling_device26/cur_state 2>/dev/null
-            echo 0 > /sys/class/thermal/cooling_device27/cur_state 2>/dev/null
-            
-            # 2. Bypass de Throttling com tela acesa (SIOP)
-            echo 100 > /sys/class/power_supply/battery/siop_level 2>/dev/null
-            echo 0 > /sys/class/power_supply/battery/siop_activated 2>/dev/null
-            echo 3300000 > /sys/class/power_supply/battery/current_max 2>/dev/null
-            echo 3300000 > /sys/class/power_supply/battery/input_current_limit 2>/dev/null
-            echo 4200000 > /sys/class/power_supply/battery/charge_control_limit_max 2>/dev/null
-            echo 1 > /sys/class/power_supply/battery/charging_enabled 2>/dev/null
+            # Desarmar apenas se o thermal-engine tentar ativar mitigacao (>0)
+            c26=$(cat /sys/class/thermal/cooling_device26/cur_state 2>/dev/null || echo 0)
+            [ "$c26" != "0" ] && echo 0 > /sys/class/thermal/cooling_device26/cur_state 2>/dev/null
+            c27=$(cat /sys/class/thermal/cooling_device27/cur_state 2>/dev/null || echo 0)
+            [ "$c27" != "0" ] && echo 0 > /sys/class/thermal/cooling_device27/cur_state 2>/dev/null
         fi
     fi
     
