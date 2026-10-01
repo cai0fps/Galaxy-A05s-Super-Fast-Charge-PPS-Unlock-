@@ -351,29 +351,50 @@
                     }
                 }
 
+                const isDischarging = ibat.startsWith("-") || proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
+
                 document.getElementById("val-soc").innerText = soc + " %";
                 document.getElementById("val-vbat").innerText = (vbat !== "--") ? `${t.cardVbatSub}: ${vbat} V` : "-- V";
-                document.getElementById("val-ibat").innerText = (ibat !== "--") ? (parseInt(ibat, 10) > 0 ? "+" : "") + ibat + " mA" : "-- mA";
+
+                const valIbatEl = document.getElementById("val-ibat");
+                const valCaboEl = document.getElementById("val-cabo");
+                const valPowerBatEl = document.getElementById("val-power-bat");
+                const valPowerBatSubEl = document.getElementById("val-power-bat-sub");
+                const valPowerSrcEl = document.getElementById("val-power-src");
+                const valPowerSrcSubEl = document.getElementById("val-power-src-sub");
 
                 if (ibat !== "--") {
                     const iNum = Math.abs(parseInt(ibat, 10));
-                    if (!isNaN(iNum)) {
-                        const caboI = Math.round(iNum / 2);
-                        document.getElementById("val-cabo").innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + caboI + " mA (÷2)";
+                    if (isDischarging) {
+                        valIbatEl.innerText = "-" + iNum + " mA";
+                        valIbatEl.style.color = "var(--accent-amber)";
+                        valCaboEl.innerText = (currentLang === "pt") ? "Sem Cabo (Em Bateria)" : "No Cable (On Battery)";
+                    } else {
+                        valIbatEl.innerText = "+" + iNum + " mA";
+                        valIbatEl.style.color = "var(--accent-green)";
+                        valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum / 2) + " mA (÷2)";
                     }
-                }
 
-                if (vbat !== "--" && ibat !== "--") {
-                    const vNum = parseFloat(vbat);
-                    const iNum = Math.abs(parseInt(ibat, 10));
-                    if (!isNaN(vNum) && !isNaN(iNum)) {
-                        // Potência dividida líquida na célula (Vbat * Ibat)
-                        const wattsBat = (vNum * iNum / 1000).toFixed(1);
-                        document.getElementById("val-power-bat").innerText = wattsBat + " W";
-
-                        // Potência na escala nominal de 9V do carregador PPS (9V * Ibat)
-                        const wattsSrc = (9.0 * iNum / 1000).toFixed(1);
-                        document.getElementById("val-power-src").innerText = wattsSrc + " W";
+                    if (vbat !== "--") {
+                        const vNum = parseFloat(vbat);
+                        if (!isNaN(vNum) && !isNaN(iNum)) {
+                            const wattsBat = (vNum * iNum / 1000).toFixed(1);
+                            if (isDischarging) {
+                                valPowerBatEl.innerText = "-" + wattsBat + " W";
+                                valPowerBatEl.style.color = "var(--accent-amber)";
+                                valPowerBatSubEl.innerText = (currentLang === "pt") ? "Consumo do Aparelho" : "Device Consumption";
+                                valPowerSrcEl.innerText = "0.0 W";
+                                valPowerSrcEl.style.color = "var(--text-dim)";
+                                valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Desconectado" : "Disconnected";
+                            } else {
+                                valPowerBatEl.innerText = "+" + wattsBat + " W";
+                                valPowerBatEl.style.color = "var(--accent)";
+                                valPowerBatSubEl.innerText = t.cardPowerBatSub;
+                                valPowerSrcEl.innerText = (9.0 * iNum / 1000).toFixed(1) + " W";
+                                valPowerSrcEl.style.color = "var(--accent-green)";
+                                valPowerSrcSubEl.innerText = t.cardPowerSrcSub;
+                            }
+                        }
                     }
                 }
 

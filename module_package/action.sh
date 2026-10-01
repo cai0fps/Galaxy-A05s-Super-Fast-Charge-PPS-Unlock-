@@ -27,12 +27,22 @@ if [ -f "$CONFIG" ]; then
     . "$CONFIG"
 fi
 
+# Deteccao confiavel de conexao ao carregador
+ac_val=$(cat /sys/class/power_supply/ac/online 2>/dev/null || echo 0)
+usb_val=$(cat /sys/class/power_supply/usb/online 2>/dev/null || echo 0)
+st_val=$(cat /sys/class/power_supply/battery/status 2>/dev/null || echo "")
+
+if [ "$ac_val" = "1" ] || [ "$usb_val" = "1" ] || [ "$st_val" = "Charging" ] || [ "$st_val" = "Full" ]; then
+    is_charging=1
+else
+    is_charging=0
+fi
+
 # Metricas brutas do hardware
 vbat=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null || echo 0)
 ibat=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || echo 0)
 temp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null || echo 0)
 soc=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo 0)
-ac_online=$(cat /sys/class/power_supply/battery/online 2>/dev/null || echo 0)
 cdev26=$(cat /sys/class/thermal/cooling_device26/cur_state 2>/dev/null || echo 0)
 quiet_t=$(cat /sys/class/thermal/thermal_zone19/temp 2>/dev/null || echo 0)
 
@@ -43,15 +53,28 @@ ibat_ma="$(( ibat_abs / 1000 ))"
 temp_c="$((temp / 10)).$((temp % 10))"
 quiet_c="$((quiet_t / 1000)).$(((quiet_t % 1000) / 100))"
 
+# Sinal da corrente e potencia (- em bateria/descarga, + conectado)
+if [ "$is_charging" = "1" ]; then
+    sign="+"
+    p_sign="+"
+    p_label_pt="entregues"
+    p_label_en="delivered"
+    power_9v_mw=$((9 * ibat_ma))
+    power_9v_w="$((power_9v_mw / 1000)).$(((power_9v_mw % 1000) / 100))"
+    cabo_ma="$((ibat_ma / 2))"
+else
+    sign="-"
+    p_sign="-"
+    p_label_pt="consumo"
+    p_label_en="consumption"
+    power_9v_w="0.0"
+    cabo_ma="0"
+fi
+
 # Potencia instantanea na Bateria (Tensão Dividida ~4.4V)
 vbat_int=$((vbat / 10000))
 power_mw=$((vbat_int * ibat_ma / 100))
-power_w="$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
-
-# Potencia na escala de 9V do Carregador PPS (Fonte / Cabo)
-power_9v_mw=$((9 * ibat_ma))
-power_9v_w="$((power_9v_mw / 1000)).$(((power_9v_mw % 1000) / 100))"
-cabo_ma=$((ibat_ma / 2))
+power_w="${p_sign}$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
 
 # Verificacao do driver no kernel (aw35615_whole)
 if lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
@@ -68,7 +91,7 @@ case "$chg_type" in
     2) [ "$IS_PT" = "1" ] && pps_status="FAST CHARGING (15W AFC/QC)" || pps_status="FAST CHARGING (15W AFC/QC)" ;;
     1) [ "$IS_PT" = "1" ] && pps_status="PADRAO (5V Comum)" || pps_status="STANDARD (5V Regular)" ;;
     *) 
-        if [ "$ac_online" = "1" ]; then
+        if [ "$is_charging" = "1" ]; then
             [ "$IS_PT" = "1" ] && pps_status="CARREGANDO (Padrao)" || pps_status="CHARGING (Standard)"
         else
             [ "$IS_PT" = "1" ] && pps_status="DESCONECTADO (Em Bateria)" || pps_status="DISCONNECTED (On Battery)"
@@ -77,9 +100,9 @@ case "$chg_type" in
 esac
 
 # Estado do Charge Pump Silergy SP2130
-if [ "$chg_type" = "3" ] && [ "$ibat_ma" -gt 1200 ]; then
+if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ] && [ "$ibat_ma" -gt 1200 ]; then
     [ "$IS_PT" = "1" ] && cp_state="LIGADO (SP2130 modo 2:1 ativo)" || cp_state="ON (SP2130 2:1 mode active)"
-elif [ "$chg_type" = "3" ]; then
+elif [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
     [ "$IS_PT" = "1" ] && cp_state="MODULADO (Arrefecimento / Espera)" || cp_state="MODULATED (Cooling / Standby)"
 else
     [ "$IS_PT" = "1" ] && cp_state="DESLIGADO" || cp_state="OFF"
@@ -92,12 +115,16 @@ if [ "$IS_PT" = "1" ]; then
     echo " [+] Charge Pump     : $cp_state"
     echo " [+] Nivel Bateria   : $soc% (Alvo: 100%)"
     echo " [+] Tensao Célula   : $vbat_v V (Bateria 1S Max 4.45V)"
-    echo " [+] Corrente Real   : +$ibat_ma mA (Bateria)"
-    echo " [+] Potencia Divid. : $power_w W (Entregue na Bateria)"
-    if [ "$chg_type" = "3" ]; then
+    echo " [+] Corrente Real   : ${sign}${ibat_ma} mA (Bateria)"
+    echo " [+] Potencia Divid. : $power_w W ($p_label_pt)"
+    if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
         echo " [+] Potencia Fonte  : $power_9v_w W (Escala 9V PPS)"
         echo " [+] Tensao do Cabo  : ~9.0 V (USB-C VBUS)"
         echo " [+] Corrente Cabo   : ~$cabo_ma mA (Divisao 2:1)"
+    elif [ "$is_charging" = "0" ]; then
+        echo " [+] Potencia Fonte  : 0.0 W (Desconectado)"
+        echo " [+] Tensao do Cabo  : 0.0 V (Sem Cabo)"
+        echo " [+] Corrente Cabo   : 0 mA (Sem Cabo)"
     fi
     echo " [+] Temp. Bateria   : $temp_c C"
     echo " [+] Temp. Carcaca   : $quiet_c C (quiet-therm)"
@@ -114,12 +141,16 @@ else
     echo " [+] Charge Pump     : $cp_state"
     echo " [+] Battery Level   : $soc% (Target: 100%)"
     echo " [+] Cell Voltage    : $vbat_v V (1S Battery Max 4.45V)"
-    echo " [+] Real Current    : +$ibat_ma mA (Battery)"
-    echo " [+] Divided Power   : $power_w W (Delivered to Cell)"
-    if [ "$chg_type" = "3" ]; then
+    echo " [+] Real Current    : ${sign}${ibat_ma} mA (Battery)"
+    echo " [+] Divided Power   : $power_w W ($p_label_en)"
+    if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
         echo " [+] Source Power    : $power_9v_w W (9V PPS Scale)"
         echo " [+] Cable Voltage   : ~9.0 V (USB-C VBUS)"
         echo " [+] Cable Current   : ~$cabo_ma mA (2:1 Division)"
+    elif [ "$is_charging" = "0" ]; then
+        echo " [+] Source Power    : 0.0 W (Disconnected)"
+        echo " [+] Cable Voltage   : 0.0 V (No Cable)"
+        echo " [+] Cable Current   : 0 mA (No Cable)"
     fi
     echo " [+] Battery Temp    : $temp_c C"
     echo " [+] Chassis Temp    : $quiet_c C (quiet-therm)"

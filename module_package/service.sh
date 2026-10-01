@@ -65,7 +65,14 @@ while true; do
     echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null
     
     # Verificar se esta conectado ao carregador
-    ac_online=$(cat /sys/class/power_supply/battery/online 2>/dev/null || echo 0)
+    ac_val=$(cat /sys/class/power_supply/ac/online 2>/dev/null || echo 0)
+    usb_val=$(cat /sys/class/power_supply/usb/online 2>/dev/null || echo 0)
+    st_val=$(cat /sys/class/power_supply/battery/status 2>/dev/null || echo "")
+    if [ "$ac_val" = "1" ] || [ "$usb_val" = "1" ] || [ "$st_val" = "Charging" ] || [ "$st_val" = "Full" ]; then
+        ac_online=1
+    else
+        ac_online=0
+    fi
     
     # Deteccao confiavel de tela ligada via wakefulness
     if dumpsys power 2>/dev/null | grep -q "mWakefulness=Awake"; then
