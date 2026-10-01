@@ -122,12 +122,22 @@ action_info    5      6      7      8      9
 
 O módulo foi empacotado no padrão oficial para **KernelSU**, **KernelSU Next** e **Magisk**:
 
-### 1. Instalador Interativo via Teclas de Volume (Anti-Bounce)
-Ao instalar o arquivo `.zip` no gerenciador root, um menu interativo de seleção única é exibido na tela, totalmente imune a cliques múltiplos ou saltos acidentais:
-* **`[VOL +]` = Modo 1: Normal**: Handshake PPS 25W direto até 100% de carga, mantendo os clocks de CPU em estado de fábrica.
-* **`[VOL -]` = Modo 2: Inteligente**: Potência máxima de 25W até 100% com Arrefecimento Dinâmico de CPU durante tela apagada, garantindo carcaça fria e mantendo o Charge Pump operando no talo sem thermal throttling.
+### 1. Novo Instalador com Cursor Interativo via Teclas de Volume
+Ao instalar o arquivo `.zip` no gerenciador root, um menu dinâmico com cursor interativo é exibido no console do instalador:
+* **`[VOL -]` = Navegar / Mudar Opção**: Move o cursor ciclicamente entre as opções (`1 -> 2 -> 3 -> 1...`).
+* **`[VOL +]` = CONFIRMAR**: Confirma a opção atualmente selecionada pelo cursor.
+* **Timeout de Segurança (30s)**: Caso não haja interação, seleciona automaticamente o Modo 3 (ULTRA).
 
-*(Nota: Todas as travas e modos vitrine de 300mA foram permanentemente removidos. A carga opera com potência máxima até 100%).*
+#### Perfis Disponíveis:
+* **`[>] 1. Modo Normal`**: Handshake PPS 25W direto até 100% de carga, mantendo os clocks de CPU em estado de fábrica.
+* **`[>] 2. Modo Inteligente`**: Potência de 25W até 100% com Arrefecimento Dinâmico de CPU durante tela apagada, garantindo carcaça fria.
+* **`[>] 3. Modo ULTRA (Recomendado / Máxima Potência)`**: 
+  - **25W Forçado** sem restrições.
+  - **Bypass Térmico Qualcomm**: Zera ativamente a atenuação do `thermal-engine` (`cooling_device26` e `27`), impedindo o corte para 10W.
+  - **Bypass de Tela Acesa (SIOP)**: Mantém corrente em 3.300 mA e `siop_level = 100` mesmo com a tela ligada.
+  - **Arrefecimento Ultra em Standby**: Clocks reduzidos para 902 MHz (Silver) e 825 MHz (Gold) com tela apagada para resfriamento rápido do chassi.
+
+*(Nota: Todas as travas e modos vitrine de 300mA e limites de 80%/85% foram permanentemente removidos. A carga opera com potência máxima até 100%).*
 
 ### 2. Painel Nativo no App do KernelSU (`action.sh`)
 Na aba de módulos do KernelSU, toque no botão **"Ação" / "Executar"** para abrir o modal com telemetria instantânea:
@@ -145,28 +155,30 @@ Na aba de módulos do KernelSU, toque no botão **"Ação" / "Executar"** para a
  [+] Corrente Real   : +2780 mA
  [+] Temp. Bateria   : 36.0 C
  [+] Temp. Carcaca   : 38.2 C (quiet-therm)
- [+] Thermal Level   : 0 (Plena Potencia)
+ [+] Perfil Ativo    : ULTRA (Modo 3)
+ [+] Bypass Termico  : ATIVO (cur_state=0)
+ [+] Bypass de Tela  : ATIVO (siop=100 / 3.3A)
 
 ==================================================
 ```
 
 ### 3. WebUI Integrada (`webroot/`)
-Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface gráfica com monitor de potência em tempo real (Watts, Volts, Amperes) e alternador de perfil com 1 clique (Normal vs Inteligente).
+Para usuários do KernelSU Next com suporte a WebUI, o módulo inclui interface gráfica com monitor de potência em tempo real (Watts, Volts, Amperes), bridge Java assíncrona corrigida e alternador de perfil com 1 clique (Normal, Inteligente e ULTRA).
 
 ---
 
 ## 📁 Estrutura de Arquivos
 
 ```
-Galaxy_A05s_SuperFastCharge_v3.3.zip
-├── module.prop                  # Metadados e versão do módulo v3.3
-├── customize.sh                 # Menu interativo anti-bounce via botões de volume
-├── service.sh                   # Daemon de boot, carregamento do driver e arrefecimento
+Galaxy_A05s_SuperFastCharge_v3.4.zip
+├── module.prop                  # Metadados e versão do módulo v3.4
+├── customize.sh                 # Novo menu com cursor interativo via botões de volume
+├── service.sh                   # Daemon de boot, bypass térmico/tela e arrefecimento
 ├── action.sh                    # Script do botão "Ação" do KernelSU
 ├── config.prop                  # Perfil ativo selecionado pelo usuário
 ├── pps_kp_override.ko           # Driver assinado com kprobes universais
 ├── webroot/
-│   └── index.html               # Dashboard WebUI para KernelSU Next
+│   └── index.html               # Dashboard WebUI para KernelSU Next (Bridge corrigida)
 └── META-INF/
     └── com/google/android/
         ├── update-binary        # Entrypoint do instalador

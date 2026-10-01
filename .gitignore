@@ -6,5 +6,6 @@
 !/module_package/**
 !/.gitignore
 !/README.md
-!/Galaxy_A05s_SuperFastCharge_v3.3.zip
+!/Galaxy_A05s_SuperFastCharge_v3.4.zip
 !/build_kprobe_override.py
+!/package_module.py

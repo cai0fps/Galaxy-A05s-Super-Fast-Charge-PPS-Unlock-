@@ -73,13 +73,17 @@
 
     <div class="section-title">Perfil de Carregamento (Alvo: 100%)</div>
     <div class="btn-group">
-        <button id="btn-normal" onclick="setProfile('NORMAL', 0)">
+        <button id="btn-normal" onclick="setProfile('NORMAL', 0, 0, 0)">
             <span>Modo 1: Normal (100%)</span>
             <span style="font-size: 0.7rem; color: var(--text-dim);">PPS Direto</span>
         </button>
-        <button id="btn-smart" onclick="setProfile('SMART', 1)">
+        <button id="btn-smart" onclick="setProfile('SMART', 1, 0, 0)">
             <span>Modo 2: Inteligente (100%)</span>
             <span style="font-size: 0.7rem; color: var(--accent);">Arrefecimento Ativo</span>
+        </button>
+        <button id="btn-ultra" onclick="setProfile('ULTRA', 2, 1, 1)">
+            <span>Modo 3: ULTRA / Máxima Potência</span>
+            <span style="font-size: 0.7rem; color: var(--accent-green);">25W Forçado + Bypass Térmico</span>
         </button>
     </div>
 
@@ -231,8 +235,8 @@
             }
         }
 
-        async function setProfile(prof, cooling) {
-            const cfg = `PROFILE=${prof}\\nMAX_PERCENT=100\\nCOOLING_PRIORITY=${cooling}\\nFORCE_SFC=1\\n`;
+        async function setProfile(prof, cooling, bypassThermal, screenBypass) {
+            const cfg = `PROFILE=${prof}\\nMAX_PERCENT=100\\nCOOLING_PRIORITY=${cooling}\\nBYPASS_THERMAL=${bypassThermal}\\nSCREEN_ON_BYPASS=${screenBypass}\\nFORCE_SFC=1\\n`;
             await exec(`echo "${cfg}" > /data/adb/modules/galaxy_a05s_pps_unlock/config.prop`);
             const k = (typeof ksu !== "undefined") ? ksu : (window.ksu || null);
             if (k && k.toast) {
@@ -248,6 +252,8 @@
             const { stdout } = await exec("cat /data/adb/modules/galaxy_a05s_pps_unlock/config.prop 2>/dev/null");
             if (stdout && stdout.indexOf("PROFILE=NORMAL") !== -1) {
                 highlightActive("NORMAL");
+            } else if (stdout && stdout.indexOf("PROFILE=ULTRA") !== -1) {
+                highlightActive("ULTRA");
             } else {
                 highlightActive("SMART");
             }
@@ -257,6 +263,9 @@
             document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
             if (prof === "NORMAL") {
                 const btn = document.getElementById("btn-normal");
+                if (btn) btn.classList.add("active");
+            } else if (prof === "ULTRA") {
+                const btn = document.getElementById("btn-ultra");
                 if (btn) btn.classList.add("active");
             } else {
                 const btn = document.getElementById("btn-smart");

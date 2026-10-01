@@ -5,7 +5,7 @@ MODDIR="${0%/*}"
 echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null
 echo 0 > /sys/class/power_supply/battery/store_mode 2>/dev/null
 
-# 2. Desativar qualquer protecao de corte nativa da OneUI (80/85%) se o usuario deseja 100%
+# 2. Desativar protecoes nativas de corte OneUI (80/85%)
 settings put global protect_battery 0 > /dev/null 2>&1
 settings put system battery_protection 0 > /dev/null 2>&1
 settings put system super_fast_charging 1 > /dev/null 2>&1
@@ -33,8 +33,10 @@ CONFIG="$MODDIR/config.prop"
 if [ -f "$CONFIG" ]; then
     . "$CONFIG"
 else
-    PROFILE="SMART"
-    COOLING_PRIORITY=1
+    PROFILE="ULTRA"
+    COOLING_PRIORITY=2
+    BYPASS_THERMAL=1
+    SCREEN_ON_BYPASS=1
 fi
 
 # Frequencias de CPU (Cluster Silver e Gold)
@@ -47,6 +49,9 @@ BIG_DEFAULT=$(cat /sys/devices/system/cpu/cpu4/cpufreq/cpuinfo_max_freq 2>/dev/n
 
 LITTLE_COOL=1190400
 BIG_COOL=1056000
+
+LITTLE_ULTRA_COOL=902400
+BIG_ULTRA_COOL=825600
 
 # Daemon em Segundo Plano
 (
@@ -66,15 +71,48 @@ while true; do
         screen_on=0
     fi
     
-    # Logica de Arrefecimento Inteligente
-    if [ "$COOLING_PRIORITY" = "1" ] && [ "$ac_online" = "1" ] && [ "$screen_on" = "0" ]; then
-        if [ "$is_capped" = "0" ]; then
-            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
-            echo $LITTLE_COOL > "$LITTLE_MAX" 2>/dev/null
-            echo $BIG_COOL > "$BIG_MAX" 2>/dev/null
-            is_capped=1
+    # ========================================================
+    # MODO 3 (ULTRA): BYPASS TERMICO & TELA LIGADA
+    # ========================================================
+    if [ "$PROFILE" = "ULTRA" ] || [ "$BYPASS_THERMAL" = "1" ]; then
+        if [ "$ac_online" = "1" ]; then
+            # 1. Desarmar thermal throttling da bateria no thermal-engine Qualcomm
+            echo 0 > /sys/class/thermal/cooling_device26/cur_state 2>/dev/null
+            echo 0 > /sys/class/thermal/cooling_device27/cur_state 2>/dev/null
+            
+            # 2. Bypass de Throttling com tela acesa (SIOP)
+            echo 100 > /sys/class/power_supply/battery/siop_level 2>/dev/null
+            echo 0 > /sys/class/power_supply/battery/siop_activated 2>/dev/null
+            echo 3300000 > /sys/class/power_supply/battery/current_max 2>/dev/null
+            echo 3300000 > /sys/class/power_supply/battery/input_current_limit 2>/dev/null
+            echo 4200000 > /sys/class/power_supply/battery/charge_control_limit_max 2>/dev/null
+            echo 1 > /sys/class/power_supply/battery/charging_enabled 2>/dev/null
+        fi
+    fi
+    
+    # ========================================================
+    # LOGICA DE ARREFECIMENTO DINAMICO DE CPU
+    # ========================================================
+    if [ "$ac_online" = "1" ] && [ "$screen_on" = "0" ]; then
+        if [ "$PROFILE" = "ULTRA" ]; then
+            # Arrefecimento Ultra em standby
+            if [ "$is_capped" = "0" ]; then
+                chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+                echo $LITTLE_ULTRA_COOL > "$LITTLE_MAX" 2>/dev/null
+                echo $BIG_ULTRA_COOL > "$BIG_MAX" 2>/dev/null
+                is_capped=1
+            fi
+        elif [ "$COOLING_PRIORITY" = "1" ]; then
+            # Arrefecimento Modo Inteligente em standby
+            if [ "$is_capped" = "0" ]; then
+                chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+                echo $LITTLE_COOL > "$LITTLE_MAX" 2>/dev/null
+                echo $BIG_COOL > "$BIG_MAX" 2>/dev/null
+                is_capped=1
+            fi
         fi
     else
+        # Tela ligada ou fora da tomada: restaurar frequencias normais de CPU
         if [ "$is_capped" = "1" ]; then
             chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
             echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
@@ -83,6 +121,6 @@ while true; do
         fi
     fi
     
-    sleep 3
+    sleep 2
 done
 ) >/dev/null 2>&1 &

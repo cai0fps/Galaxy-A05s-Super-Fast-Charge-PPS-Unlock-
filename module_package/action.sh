@@ -3,9 +3,16 @@
 
 echo "=================================================="
 echo "    GALAXY A05s — PAINEL DE TELEMETRIA PPS"
-echo "               por @cai0fps                      "
+echo "               por @cai0fps                       "
 echo "=================================================="
 echo ""
+
+# Carregar configuracao ativa
+CONFIG="/data/adb/modules/galaxy_a05s_pps_unlock/config.prop"
+PROFILE="ULTRA"
+if [ -f "$CONFIG" ]; then
+    . "$CONFIG"
+fi
 
 # Metricas brutas do hardware
 vbat=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null || echo 0)
@@ -22,6 +29,11 @@ ibat_abs=$(( ibat < 0 ? -ibat : ibat ))
 ibat_ma="$(( ibat_abs / 1000 ))"
 temp_c="$((temp / 10)).$((temp % 10))"
 quiet_c="$((quiet_t / 1000)).$(((quiet_t % 1000) / 100))"
+
+# Potencia instantanea em Watts
+vbat_int=$((vbat / 10000))
+power_mw=$((vbat_int * ibat_ma / 100))
+power_w="$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
 
 # Verificacao do driver no kernel (aw35615_whole)
 if lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
@@ -49,14 +61,20 @@ else
     cp_state="DESLIGADO"
 fi
 
+echo " [+] Perfil Ativo    : Modo $PROFILE"
 echo " [+] Driver Kernel   : $drv_status"
 echo " [+] Protocolo USB   : $pps_status"
 echo " [+] Charge Pump     : $cp_state"
 echo " [+] Nivel Bateria   : $soc% (Alvo: 100%)"
 echo " [+] Tensao Bateria  : $vbat_v V"
 echo " [+] Corrente Real   : +$ibat_ma mA"
+echo " [+] Potencia Real   : $power_w W entregues"
 echo " [+] Temp. Bateria   : $temp_c C"
 echo " [+] Temp. Carcaca   : $quiet_c C (quiet-therm)"
-echo " [+] Thermal Level   : $cdev26 (0 = Plena Potencia)"
+echo " [+] Nivel Termico   : $cdev26 (0 = Plena Potencia)"
+if [ "$PROFILE" = "ULTRA" ]; then
+    echo " [+] Bypass Termico  : ATIVO (Throttling desarmado)"
+    echo " [+] Bypass de Tela  : ATIVO (25W liberado com tela ligada)"
+fi
 echo ""
 echo "=================================================="

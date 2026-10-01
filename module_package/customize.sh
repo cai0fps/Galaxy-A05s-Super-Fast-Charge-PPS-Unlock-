@@ -2,111 +2,156 @@ SKIPUNZIP=0
 
 ui_print "=================================================="
 ui_print "   GALAXY A05s — SUPER FAST CHARGE (PPS UNLOCK)   "
-ui_print "            Versao v3.3 Universal                 "
-ui_print "               por @cai0fps                      "
+ui_print "            Versao v3.4 Universal                 "
+ui_print "               por @cai0fps                       "
 ui_print "=================================================="
 ui_print ""
 
 # Limpar modulos antigos remanescentes para evitar conflitos
-if [ -d "/data/adb/modules/pps_fase3a" ]; then
-    ui_print "[*] Removendo versao de teste anterior (pps_fase3a)..."
-    rm -rf "/data/adb/modules/pps_fase3a" 2>/dev/null
-fi
-if [ -d "/data/adb/modules/pps_fase2" ]; then
-    ui_print "[*] Removendo versao de teste anterior (pps_fase2)..."
-    rm -rf "/data/adb/modules/pps_fase2" 2>/dev/null
-fi
+rm -rf "/data/adb/modules/pps_fase3a" 2>/dev/null
+rm -rf "/data/adb/modules/pps_fase2" 2>/dev/null
+rm -f "/data/adb/modules/disable" 2>/dev/null
 
-# Desbloquear imediatamente qualquer trava de 300mA residual
+# Desbloquear imediatamente qualquer trava residual
 echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null
 echo 0 > /sys/class/power_supply/battery/store_mode 2>/dev/null
 
-# Helper robusto para deteccao de teclas de volume (anti-bounce e timeout 15s)
-chooseport() {
-    # Retorna 0 em VOL+, 1 em VOL-
-    local key=""
+ui_print "[*] Controles do Instalador:"
+ui_print "    [VOL -] = Navegar / Mudar Opcao"
+ui_print "    [VOL +] = CONFIRMAR Opcao Selecionada"
+ui_print ""
+
+# Seletor interativo com cursor
+choose_profile() {
+    local selected=3
+    local total=3
+    
+    print_menu() {
+        ui_print "--------------------------------------------------"
+        ui_print " Selecione o Perfil de Carregamento:"
+        ui_print " [VOL -] = Mudar Opcao | [VOL +] = CONFIRMAR"
+        ui_print "--------------------------------------------------"
+        if [ "$selected" = "1" ]; then
+            ui_print " [>] 1. Modo Normal (PPS 25W Padrao ate 100%)"
+        else
+            ui_print " [ ] 1. Modo Normal (PPS 25W Padrao ate 100%)"
+        fi
+        if [ "$selected" = "2" ]; then
+            ui_print " [>] 2. Modo Inteligente (Arrefecimento de CPU em tela apagada)"
+        else
+            ui_print " [ ] 2. Modo Inteligente (Arrefecimento de CPU em tela apagada)"
+        fi
+        if [ "$selected" = "3" ]; then
+            ui_print " [>] 3. Modo ULTRA (25W Maximo Forcado + Bypass Termico)"
+        else
+            ui_print " [ ] 3. Modo ULTRA (25W Maximo Forcado + Bypass Termico)"
+        fi
+        ui_print " -> Aperte [VOL-] para alternar ou [VOL+] para confirmar..."
+    }
+    
+    print_menu
     local start_time=$(date +%s 2>/dev/null || echo 0)
     
-    # 1. Aguarda o evento de pressionar (DOWN) com timeout de 15s
     while true; do
         local line
         line=$(timeout 1 getevent -lqc 1 2>/dev/null)
         case "$line" in
-            *KEY_VOLUMEUP*DOWN*|*0073*00000001*)
-                key="UP"
-                break
-                ;;
             *KEY_VOLUMEDOWN*DOWN*|*0072*00000001*)
-                key="DOWN"
-                break
+                # Espera soltar a tecla VOL-
+                while true; do
+                    local rel=$(timeout 1 getevent -lqc 1 2>/dev/null)
+                    case "$rel" in
+                        *KEY_VOLUMEDOWN*UP*|*0072*00000000*|"") break ;;
+                    esac
+                done
+                sleep 0.15
+                
+                # Incrementa cursor
+                if [ "$selected" -ge "$total" ]; then
+                    selected=1
+                else
+                    selected=$((selected + 1))
+                fi
+                ui_print ""
+                print_menu
+                start_time=$(date +%s 2>/dev/null || echo 0)
+                ;;
+                
+            *KEY_VOLUMEUP*DOWN*|*0073*00000001*)
+                # Espera soltar a tecla VOL+
+                while true; do
+                    local rel=$(timeout 1 getevent -lqc 1 2>/dev/null)
+                    case "$rel" in
+                        *KEY_VOLUMEUP*UP*|*0073*00000000*|"") break ;;
+                    esac
+                done
+                sleep 0.2
+                
+                ui_print ""
+                ui_print "[+] CONFIRMADO: Opcao $selected selecionada!"
+                return $selected
                 ;;
         esac
         
+        # Timeout de inatividade de 30s (padrao: Modo 3 ULTRA)
         local now=$(date +%s 2>/dev/null || echo 0)
-        if [ "$now" -gt 0 ] && [ "$((now - start_time))" -ge 15 ]; then
-            ui_print "[i] Timeout (15s sem clique). Selecionando: Modo 2 (Inteligente 100%)."
-            return 1
+        if [ "$now" -gt 0 ] && [ "$((now - start_time))" -ge 30 ]; then
+            ui_print ""
+            ui_print "[i] Timeout (30s sem clique). Confirmando Opcao $selected automaticamente."
+            return $selected
         fi
     done
-    
-    # 2. Aguarda o usuario soltar a tecla fisicamente (UP)
-    while true; do
-        local rel
-        rel=$(timeout 1 getevent -lqc 1 2>/dev/null)
-        case "$rel" in
-            *KEY_VOLUMEUP*UP*|*0073*00000000*)
-                [ "$key" = "UP" ] && break
-                ;;
-            *KEY_VOLUMEDOWN*UP*|*0072*00000000*)
-                [ "$key" = "DOWN" ] && break
-                ;;
-            "")
-                # Ja soltou a tecla
-                break
-                ;;
-        esac
-    done
-    
-    sleep 0.3
-    
-    if [ "$key" = "UP" ]; then
-        return 0
-    else
-        return 1
-    fi
 }
 
-ui_print "[*] Selecione o Perfil de Carregamento:"
-ui_print "    [VOL+] = Modo 1: Normal (PPS Padrao 25W direto ate 100%)"
-ui_print "    [VOL-] = Modo 2: Inteligente (PPS 25W + Arrefecimento de CPU ate 100%)"
+choose_profile
+CHOICE=$?
+
+SEL_PROFILE="ULTRA"
+SEL_COOLING="2"
+SEL_BYPASS_THERMAL="1"
+SEL_SCREEN_BYPASS="1"
+
+case "$CHOICE" in
+    1)
+        SEL_PROFILE="NORMAL"
+        SEL_COOLING="0"
+        SEL_BYPASS_THERMAL="0"
+        SEL_SCREEN_BYPASS="0"
+        ui_print "[>] Perfil Selecionado: Modo 1 (Normal 25W / 100%)"
+        ;;
+    2)
+        SEL_PROFILE="SMART"
+        SEL_COOLING="1"
+        SEL_BYPASS_THERMAL="0"
+        SEL_SCREEN_BYPASS="0"
+        ui_print "[>] Perfil Selecionado: Modo 2 (Inteligente 25W Turbo / 100%)"
+        ;;
+    3|*)
+        SEL_PROFILE="ULTRA"
+        SEL_COOLING="2"
+        SEL_BYPASS_THERMAL="1"
+        SEL_SCREEN_BYPASS="1"
+        ui_print "[>] Perfil Selecionado: Modo 3 (ULTRA Potencia Maxima / 25W Forcado + Bypass Termico)"
+        ;;
+esac
+
 ui_print ""
-
-SEL_PROFILE="SMART"
-SEL_COOLING="1"
-
-if chooseport; then
-    SEL_PROFILE="NORMAL"
-    SEL_COOLING="0"
-    ui_print "[>] Selecionado: Modo 1 (Normal 25W / 100%)"
-else
-    SEL_PROFILE="SMART"
-    SEL_COOLING="1"
-    ui_print "[>] Selecionado: Modo 2 (Inteligente 25W Turbo / 100%)"
-fi
-
-ui_print ""
-ui_print "[*] Gravando configuracao..."
+ui_print "[*] Gravando configuracao do usuario..."
 cat <<EOF > "$MODPATH/config.prop"
 # Configuracao do Modulo Super Fast Charge A05s por @cai0fps
 PROFILE=$SEL_PROFILE
 MAX_PERCENT=100
 COOLING_PRIORITY=$SEL_COOLING
+BYPASS_THERMAL=$SEL_BYPASS_THERMAL
+SCREEN_ON_BYPASS=$SEL_SCREEN_BYPASS
 FORCE_SFC=1
 EOF
 
-ui_print "[+] Perfil Gravado: $SEL_PROFILE"
-ui_print "[+] Carga Maxima  : 100% (Sem travas de corte)"
-ui_print "[+] Arrefecimento : $SEL_COOLING"
+ui_print "[+] Perfil Gravado   : $SEL_PROFILE"
+ui_print "[+] Carga Maxima     : 100% (Sem travas de corte)"
+ui_print "[+] Arrefecimento    : Nivel $SEL_COOLING"
+ui_print "[+] Bypass Termico   : $SEL_BYPASS_THERMAL (Desarma throttling Qualcomm)"
+ui_print "[+] Bypass de Tela   : $SEL_SCREEN_BYPASS (Potencia maxima com tela ligada)"
 ui_print ""
 
 # Permissoes de execucao
