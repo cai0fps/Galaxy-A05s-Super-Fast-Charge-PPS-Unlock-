@@ -75,7 +75,7 @@ echo " [+] Nivel Termico   : $cdev26 (0 = Plena Potencia)"
 if [ "$PROFILE" = "ULTRA" ]; then
     echo " [+] Bypass Termico  : ATIVO (Throttling desarmado)"
     echo " [+] Bypass de Tela  : ATIVO (25W liberado com tela ligada)"
-    echo " [!] Modo ULTRA: Uso por conta e risco exclusivos do usuario."
 fi
+echo " [!] Uso deste modulo por conta e risco exclusivos do usuario."
 echo ""
 echo "=================================================="

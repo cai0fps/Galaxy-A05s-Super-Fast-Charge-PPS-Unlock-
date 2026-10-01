@@ -203,11 +203,11 @@ Galaxy_A05s_SuperFastCharge_v3.4.zip
   3. **Garantia:** Perda, anulação ou recusa de garantia oficial perante o fabricante Samsung ou qualquer assistência técnica autorizada decorrente do desbloqueio de bootloader, uso de KernelSU/Magisk ou execução de scripts de modificação de kernel.
   4. **Software e Dados:** Corrupção de partições, perda de dados pessoais, travamentos, reinicializações repentinas (*bootloops*) ou instabilidades operacionais do sistema operacional OneUI/Android.
 
-### 3. Cláusula de Consentimento Expresso — Modo 3: ULTRA
-* O **Modo 3 (ULTRA / Máxima Potência)** foi concebido como um modo extremo de bancada para entrega ininterrupta de 25W. Ele realiza intervenções profundas no subsistema térmico:
-  * **Desativa a mitigação térmica do daemon Qualcomm:** Força `cur_state = 0` nos atuadores `cooling_device26` e `cooling_device27` (`[BATT_SKIN_MITIGATION]`), suprimindo o rebaixamento automático para 10W quando a carcaça ultrapassa 43 °C.
-  * **Desativa a proteção de tela ligada da OneUI:** Força `siop_level = 100` e corrente em 3.300 mA com o display iluminado em 90Hz.
-* **Consentimento do Usuário:** Ao instalar este módulo e selecionar ou confirmar o **Modo ULTRA** (seja no instalador via teclas de volume ou pelo painel WebUI), o usuário declara **ciência plena e expressa de todos os riscos térmicos e de estresse elétrico**, prestando seu **consentimento irrevogável** e assumindo **100% de responsabilidade civil, financeira e técnica** por quaisquer danos que venham a ocorrer em seu dispositivo.
+### 3. Cláusula de Consentimento Geral e Irrevogável do Usuário (Para Todo o Módulo e Todos os Modos)
+* **Abrangência Universal:** O consentimento e a assunção de risco aplicam-se ao **módulo em sua totalidade, abrangendo todo e qualquer modo de operação (Modo 1: Normal, Modo 2: Inteligente e Modo 3: ULTRA)**.
+* **Isenção de Custos e Reparações:** O autor ([@cai0fps](https://github.com/cai0fps)) **NÃO arca, não indeniza e não se responsabiliza sob nenhuma hipótese por quaisquer custos, reparos, prejuízos, avarias ou problemas causados** direta ou indiretamente ao aparelho ou a terceiros.
+* **Consentimento Informado:** Ao baixar, clonar, instalar ou utilizar este módulo em qualquer dispositivo ou configuração, o usuário declara **ciência plena, prévia e inequívoca de todos os riscos operacionais, elétricos e térmicos**, manifestando seu **consentimento livre e irrevogável** e assumindo **100% de responsabilidade civil, técnica e financeira** por quaisquer eventos decorrentes do seu uso.
+* **Modo 3 (ULTRA / Alta Potência):** Ressalta-se que o Modo ULTRA opera sem os limitadores térmicos do daemon Qualcomm (`cooling_device26/27`) e sem o limite de tela ligada da OneUI (SIOP), destinando-se a testes de bancada sob monitoramento ativo do próprio usuário.
 
 ---
 
