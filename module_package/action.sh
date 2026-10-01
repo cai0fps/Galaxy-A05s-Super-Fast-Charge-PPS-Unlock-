@@ -53,21 +53,61 @@ ibat_ma="$(( ibat_abs / 1000 ))"
 temp_c="$((temp / 10)).$((temp % 10))"
 quiet_c="$((quiet_t / 1000)).$(((quiet_t % 1000) / 100))"
 
-# Protocolo de Carga via dumpsys battery
-chg_line=$(dumpsys battery 2>/dev/null | grep "charger_type:" | head -n 1)
-chg_type="${chg_line##* }"
-case "$chg_type" in
-    3) [ "$IS_PT" = "1" ] && pps_status="SUPER FAST CHARGING (PPS 25W ATIVO)" || pps_status="SUPER FAST CHARGING (25W PPS ACTIVE)" ;;
-    2) [ "$IS_PT" = "1" ] && pps_status="FAST CHARGING (15W AFC/QC)" || pps_status="FAST CHARGING (15W AFC/QC)" ;;
-    1) [ "$IS_PT" = "1" ] && pps_status="PADRAO (5V Comum)" || pps_status="STANDARD (5V Regular)" ;;
-    *) 
-        if [ "$is_charging" = "1" ]; then
-            [ "$IS_PT" = "1" ] && pps_status="CARREGANDO (Padrao)" || pps_status="CHARGING (Standard)"
-        else
-            [ "$IS_PT" = "1" ] && pps_status="DESCONECTADO (Em Bateria)" || pps_status="DISCONNECTED (On Battery)"
-        fi
-        ;;
-esac
+# Deteccao multifatorial confiavel de Super Fast Charging PPS (9V) e Fast Charging
+chg_type=$(dumpsys battery 2>/dev/null | grep -o 'charger_type:[0-9]*' | tail -n 1 | cut -d: -f2)
+[ -z "$chg_type" ] && chg_type=0
+hvc_val=$(dumpsys battery 2>/dev/null | grep -o 'hvc:[a-z]*' | tail -n 1 | cut -d: -f2)
+is_pps=0
+is_afc=0
+
+# 1. Checagem direta de Direct Charging no driver do kernel
+dc_stat=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
+[ "$dc_stat" != "0" ] && is_pps=1
+
+# 1b. Checagem no power_supply do Silergy SP2130 (charger_standalone)
+cp_status_raw=$(cat /sys/class/power_supply/charger_standalone/status 2>/dev/null || echo "")
+[ "$cp_status_raw" = "Charging" ] && is_pps=1
+
+# 2. charger_type == 3 do Android (Super Fast Charging / PPS)
+if [ "$chg_type" = "3" ]; then
+    is_pps=1
+elif [ "$chg_type" = "2" ]; then
+    is_afc=1
+fi
+
+# 3. High Voltage Charging (HVC)
+if [ "$hvc_val" = "true" ]; then
+    if [ "$ibat_ma" -gt 1800 ] || [ "$dc_stat" != "0" ] || [ "$chg_type" = "3" ] || [ "$cp_status_raw" = "Charging" ]; then
+        is_pps=1
+    else
+        is_afc=1
+    fi
+fi
+
+# 4. Checagem de dmesg recente (negociacao sink_vbus 9000 ou charge pump habilitado)
+if dmesg 2>/dev/null | tail -n 40 | grep -qE "sink_vbus 9000|cp enable: 1|type\(0x84\)"; then
+    is_pps=1
+fi
+
+# 5. Checagem de hardware: no Galaxy A05s o Buck 5V e limitado a 2A.
+# Qualquer corrente >= 1850mA so e fisicamente possivel no SP2130 (PPS 2:1 a 9V)!
+if [ "$is_charging" = "1" ] && [ "$ibat_ma" -ge 1850 ]; then
+    is_pps=1
+fi
+
+if [ "$is_pps" = "1" ] && [ "$is_charging" = "1" ]; then
+    chg_type=3
+    [ "$IS_PT" = "1" ] && pps_status="SUPER FAST CHARGING (PPS 9V ATIVO)" || pps_status="SUPER FAST CHARGING (9V PPS ACTIVE)"
+elif [ "$is_afc" = "1" ] && [ "$is_charging" = "1" ]; then
+    chg_type=2
+    [ "$IS_PT" = "1" ] && pps_status="FAST CHARGING (15W AFC/QC 9V)" || pps_status="FAST CHARGING (15W AFC/QC 9V)"
+elif [ "$is_charging" = "1" ]; then
+    chg_type=1
+    [ "$IS_PT" = "1" ] && pps_status="PADRAO (5V Comum)" || pps_status="STANDARD (5V Regular)"
+else
+    chg_type=0
+    [ "$IS_PT" = "1" ] && pps_status="DESCONECTADO (Em Bateria)" || pps_status="DISCONNECTED (On Battery)"
+fi
 
 # Potencia instantanea na Bateria (Tensão Dividida ~4.4V)
 vbat_int=$((vbat / 10000))
@@ -133,9 +173,9 @@ else
 fi
 
 # Estado do Charge Pump Silergy SP2130
-if [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ] && [ "$ibat_ma" -gt 1200 ]; then
+if { [ "$chg_type" = "3" ] || [ "$is_pps" = "1" ] || [ "$cp_status_raw" = "Charging" ]; } && [ "$is_charging" = "1" ] && [ "$ibat_ma" -gt 1200 ]; then
     [ "$IS_PT" = "1" ] && cp_state="LIGADO (SP2130 modo 2:1 ativo)" || cp_state="ON (SP2130 2:1 mode active)"
-elif [ "$chg_type" = "3" ] && [ "$is_charging" = "1" ]; then
+elif { [ "$chg_type" = "3" ] || [ "$is_pps" = "1" ]; } && [ "$is_charging" = "1" ]; then
     [ "$IS_PT" = "1" ] && cp_state="MODULADO (Arrefecimento / Espera)" || cp_state="MODULATED (Cooling / Standby)"
 else
     [ "$IS_PT" = "1" ] && cp_state="DESLIGADO" || cp_state="OFF"

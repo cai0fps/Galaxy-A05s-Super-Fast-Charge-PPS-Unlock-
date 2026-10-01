@@ -187,9 +187,9 @@
             pt: {
                 btnLang: "🌐 EN",
                 badgeChecking: "Verificando...",
-                badgeActive: "PPS ATIVO (25W)",
-                badgeFast: "AFC 15W",
-                badgeStandard: "5V PADRÃO",
+                badgeActive: "PPS 9V (25W)",
+                badgeFast: "AFC 9V (15W)",
+                badgeStandard: "PADRÃO 5V",
                 badgeBattery: "EM BATERIA",
                 cardBat: "Bateria",
                 cardVbatSub: "Célula 1S",
@@ -226,8 +226,8 @@
             en: {
                 btnLang: "🌐 PT",
                 badgeChecking: "Checking...",
-                badgeActive: "25W PPS ACTIVE",
-                badgeFast: "FAST CHARGE (15W)",
+                badgeActive: "25W PPS (9V)",
+                badgeFast: "AFC 9V (15W)",
                 badgeStandard: "STANDARD 5V",
                 badgeBattery: "ON BATTERY",
                 cardBat: "Battery",
@@ -350,8 +350,13 @@
                 }
 
                 const isDischarging = ibat.startsWith("-") || proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
-                const isPPS = proto.indexOf("PPS") !== -1;
-                const isAFC = proto.indexOf("FAST") !== -1 || proto.indexOf("AFC") !== -1;
+                const iNum = (ibat !== "--") ? Math.abs(parseInt(ibat, 10)) : 0;
+                const isCpOn = cp.indexOf("LIGADO") !== -1 || cp.indexOf("ON") !== -1;
+                const isCpMod = cp.indexOf("MODULADO") !== -1 || cp.indexOf("MODULATED") !== -1;
+
+                // Galaxy A05s: O Buck 5V possui teto de 2000mA. Corrente >= 1850mA so e possivel no SP2130 (9V PPS 2:1)
+                const isPPS = (!isDischarging) && (proto.indexOf("PPS") !== -1 || isCpOn || iNum >= 1850);
+                const isAFC = (!isDischarging) && (!isPPS) && (proto.indexOf("FAST") !== -1 || proto.indexOf("AFC") !== -1);
 
                 document.getElementById("val-soc").innerText = soc + " %";
                 document.getElementById("val-vbat").innerText = (vbat !== "--") ? `${t.cardVbatSub}: ${vbat} V` : "-- V";
@@ -364,7 +369,6 @@
                 const valPowerSrcSubEl = document.getElementById("val-power-src-sub");
 
                 if (ibat !== "--") {
-                    const iNum = Math.abs(parseInt(ibat, 10));
                     if (isDischarging) {
                         valIbatEl.innerText = "-" + iNum + " mA";
                         valIbatEl.style.color = "var(--accent-amber)";
@@ -401,18 +405,18 @@
                                     const wattsSrc = (vNum * iNum * 1.03 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
                                     valPowerSrcEl.style.color = "var(--accent-green)";
-                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte ~9V (PPS 25W)" : "Source ~9V (25W PPS)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte ~9.0V (PPS 25W)" : "Source ~9.0V (25W PPS)";
                                 } else if (isAFC) {
                                     const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
                                     valPowerSrcEl.style.color = "var(--accent-amber)";
-                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 9V (AFC 15W)" : "Source 9V (AFC 15W)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 9.0V (AFC 15W)" : "Source 9.0V (AFC 15W)";
                                 } else {
                                     // PC USB ou Carregador Comum de 5V
                                     const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
                                     valPowerSrcEl.style.color = "var(--text-dim)";
-                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5V (USB PC / Comum)" : "Source 5V (PC USB / Regular)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (USB PC / Comum)" : "Source 5.0V (PC USB / Regular)";
                                 }
                             }
                         }
@@ -422,19 +426,17 @@
                 document.getElementById("val-temp").innerText = temp + " °C";
                 document.getElementById("val-quiet").innerText = t.cardQuiet + ": " + quiet + " °C";
                 
-                const isCpOn = cp.indexOf("LIGADO") !== -1 || cp.indexOf("ON") !== -1;
-                const isCpMod = cp.indexOf("MODULADO") !== -1 || cp.indexOf("MODULATED") !== -1;
-                document.getElementById("val-cp").innerText = isCpOn ? (currentLang === "pt" ? "LIGADO (2:1)" : "ON (2:1)") : (isCpMod ? (currentLang === "pt" ? "MODULADO" : "MODULATED") : (currentLang === "pt" ? "DESLIGADO" : "OFF"));
+                document.getElementById("val-cp").innerText = (isCpOn || isPPS) ? (currentLang === "pt" ? "LIGADO (2:1)" : "ON (2:1)") : (isCpMod ? (currentLang === "pt" ? "MODULADO" : "MODULATED") : (currentLang === "pt" ? "DESLIGADO" : "OFF"));
                 document.getElementById("val-thermal").innerText = t.cardThermal + ": " + cdev;
 
                 const badge = document.getElementById("pps-badge");
-                if (proto.indexOf("PPS") !== -1) {
+                if (isPPS) {
                     badge.innerText = t.badgeActive;
                     badge.className = "badge badge-active";
-                } else if (proto.indexOf("FAST") !== -1) {
+                } else if (isAFC) {
                     badge.innerText = t.badgeFast;
                     badge.className = "badge badge-warn";
-                } else if (proto.indexOf("PADRAO") !== -1 || proto.indexOf("STANDARD") !== -1 || proto.indexOf("CARREGANDO") !== -1 || proto.indexOf("CHARGING") !== -1) {
+                } else if (!isDischarging) {
                     badge.innerText = t.badgeStandard;
                     badge.className = "badge badge-warn";
                 } else {
