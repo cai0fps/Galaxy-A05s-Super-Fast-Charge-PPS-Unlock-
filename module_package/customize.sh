@@ -6,6 +6,15 @@ ui_print "            Versao v3.4 Universal                 "
 ui_print "               por @cai0fps                       "
 ui_print "=================================================="
 ui_print ""
+ui_print " [!] AVISO LEGAL E CONSENTIMENTO DE USO:"
+ui_print "  Projeto experimental para testes e pesquisa."
+ui_print "  O autor (@cai0fps) NAO se responsabiliza por"
+ui_print "  danos materiais, desgaste acelerado da bateria,"
+ui_print "  perda de garantia ou instabilidades termicas."
+ui_print "  O uso, em especial do Modo ULTRA, e de sua"
+ui_print "  exclusiva e inteira responsabilidade!"
+ui_print "=================================================="
+ui_print ""
 
 # Limpar modulos antigos remanescentes para evitar conflitos
 rm -rf "/data/adb/modules/pps_fase3a" 2>/dev/null
@@ -132,6 +141,8 @@ case "$CHOICE" in
         SEL_BYPASS_THERMAL="1"
         SEL_SCREEN_BYPASS="1"
         ui_print "[>] Perfil Selecionado: Modo 3 (ULTRA Potencia Maxima / 25W Forcado + Bypass Termico)"
+        ui_print " [!] TERMO: Voce consentiu com o Modo ULTRA (Bypass Termico Ativo)."
+        ui_print " [!] O usuario assume total responsabilidade por aquecimento e uso."
         ;;
 esac
 

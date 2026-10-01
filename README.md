@@ -187,6 +187,51 @@ Galaxy_A05s_SuperFastCharge_v3.4.zip
 
 ---
 
+## ⚠️ Termo de Responsabilidade, Isenção Legal e Consentimento de Uso
+
+> ### 🛑 AVISO IMPORTANTE: LEIA ATENTAMENTE ANTES DE INSTALAR OU UTILIZAR
+> Este projeto consiste em uma prova de conceito (PoC) de engenharia reversa e modificação de subsistemas de baixo nível do kernel Linux Android (Qualcomm Snapdragon 680). 
+
+### 1. Natureza Experimental e Acadêmica
+* Todo o código, binários, scripts e drivers disponibilizados neste repositório são fornecidos exclusivamente para **fins educacionais, de pesquisa técnica e validação experimental de protocolos de recarga (USB-PD PPS)**.
+* Este software é distribuído **"COMO ESTÁ" ("AS IS")**, sem qualquer tipo de garantia expressa ou implícita, incluindo, mas não se limitando a, garantias de funcionamento ininterrupto, adequação a um propósito específico ou preservação da vida útil do equipamento.
+
+### 2. Isenção Total de Responsabilidade do Autor (@cai0fps)
+* **O desenvolvedor e autor ([@cai0fps](https://github.com/cai0fps)) NÃO se responsabiliza, em nenhuma hipótese ou circunstância jurídica, por:**
+  1. **Danos Físicos ou Materiais:** Queima, curto-circuito, sobretensão ou falha irreversível de circuitos integrados (incluindo PMIC Qualcomm, chip TCPC Richtek RT1711H, Silergy SP2130 Charge Pump, fuel gauge SM5602, tela, conector USB-C ou placa-mãe).
+  2. **Danos à Bateria:** Degradação acelerada da capacidade química, redução dos ciclos de vida útil, aquecimento excessivo, inchaço ou vazamento de células de íon de lítio.
+  3. **Garantia:** Perda, anulação ou recusa de garantia oficial perante o fabricante Samsung ou qualquer assistência técnica autorizada decorrente do desbloqueio de bootloader, uso de KernelSU/Magisk ou execução de scripts de modificação de kernel.
+  4. **Software e Dados:** Corrupção de partições, perda de dados pessoais, travamentos, reinicializações repentinas (*bootloops*) ou instabilidades operacionais do sistema operacional OneUI/Android.
+
+### 3. Cláusula de Consentimento Expresso — Modo 3: ULTRA
+* O **Modo 3 (ULTRA / Máxima Potência)** foi concebido como um modo extremo de bancada para entrega ininterrupta de 25W. Ele realiza intervenções profundas no subsistema térmico:
+  * **Desativa a mitigação térmica do daemon Qualcomm:** Força `cur_state = 0` nos atuadores `cooling_device26` e `cooling_device27` (`[BATT_SKIN_MITIGATION]`), suprimindo o rebaixamento automático para 10W quando a carcaça ultrapassa 43 °C.
+  * **Desativa a proteção de tela ligada da OneUI:** Força `siop_level = 100` e corrente em 3.300 mA com o display iluminado em 90Hz.
+* **Consentimento do Usuário:** Ao instalar este módulo e selecionar ou confirmar o **Modo ULTRA** (seja no instalador via teclas de volume ou pelo painel WebUI), o usuário declara **ciência plena e expressa de todos os riscos térmicos e de estresse elétrico**, prestando seu **consentimento irrevogável** e assumindo **100% de responsabilidade civil, financeira e técnica** por quaisquer danos que venham a ocorrer em seu dispositivo.
+
+---
+
+## 🛡️ Cláusulas Anti-Problemas e Diretrizes de Segurança (Mitigação de Riscos)
+
+Para garantir a máxima integridade do seu aparelho e evitar acidentes ou desgaste prematuro, siga rigorosamente as seguintes recomendações:
+
+1. **Utilize Apenas Fontes Certificadas com PPS Genuíno:**
+   * Recomenda-se o uso do carregador original Samsung de 25W (`EP-TA800`) ou adaptadores de marcas renomadas com certificação oficial USB-IF (ex: Anker, Baseus, Ugreen, Essager).
+   * **NUNCA** utilize fontes genéricas, réplicas sem homologação ou carregadores sem filtragem de ruído/ripple, pois oscilações na linha VBUS podem danificar o capacitor chaveado do Charge Pump SP2130.
+2. **Cabo USB-C de Qualidade (Classificação 3A Mínima):**
+   * Utilize cabos íntegros com fios de alimentação de bitola compatível ($3\text{ A}$ contínuos) e integridade nas linhas de comunicação CC (Configuration Channel). Cabos danificados provocam quedas de tensão no VBUS e falhas de handshake.
+3. **Dissipação de Calor e Ventilação Adequada:**
+   * **NUNCA** recarregue o aparelho sobre ou debaixo de superfícies isolantes térmicas (como travesseiros, lençóis, cobertores, sofás ou mochilas fechadas).
+   * Evite carregar o aparelho sob luz solar direta ou em ambientes com temperatura ambiente excessivamente alta ($> 35^\circ\text{C}$).
+4. **Remoção de Capinhas Protetoras Espessas:**
+   * Capas de proteção muito espessas (como capas de couro ou borracha pesada anti-impacto) retêm o calor irradiado pela carcaça traseira. Recomenda-se retirá-las durante sessões de carregamento rápido no Modo ULTRA.
+5. **Recomendação para Uso Cotidiano:**
+   * Para o uso diário, o perfil recomendado é o **Modo 2 (Inteligente)**, pois ele atinge os 25W completos e aciona o arrefecimento dinâmico de CPU com a tela apagada, mantendo o chassi frio e preservando as margens originais de segurança.
+6. **Aferição e Monitoramento Periódico:**
+   * Utilize o botão **"Ação"** no KernelSU para monitorar a temperatura da bateria (`temp_c`) e da carcaça (`quiet-therm`). Caso a bateria alcance temperaturas anômalas ($> 45^\circ\text{C}$ contínuos), desconecte o carregador e aguarde o arrefecimento natural do dispositivo.
+
+---
+
 ## 👤 Autor
 
 Desenvolvido e pesquisado por:  

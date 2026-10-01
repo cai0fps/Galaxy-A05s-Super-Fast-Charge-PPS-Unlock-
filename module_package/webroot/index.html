@@ -87,6 +87,10 @@
         </button>
     </div>
 
+    <div style="margin-top: 10px; margin-bottom: 18px; padding: 10px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; font-size: 0.72rem; color: #fca5a5; line-height: 1.4;">
+        ⚠️ <strong>Termo de Responsabilidade & Consentimento:</strong> O <em>Modo ULTRA</em> desativa o throttling térmico Qualcomm e o limite de tela ligada da OneUI. Ao ativá-lo, o usuário declara consentimento pleno e assume 100% da responsabilidade por eventuais danos ou desgaste térmico. O desenvolvedor <strong>@cai0fps</strong> isenta-se expressamente de quaisquer danos decorrentes do uso.
+    </div>
+
     <div class="section-title">Registro ao Vivo do Kernel</div>
     <div id="log-box" class="terminal-card">Iniciando conexao com KernelSU...</div>
 
@@ -236,6 +240,10 @@
         }
 
         async function setProfile(prof, cooling, bypassThermal, screenBypass) {
+            if (prof === "ULTRA") {
+                const agree = confirm("⚠️ AVISO DE RESPONSABILIDADE & CONSENTIMENTO:\n\nO Modo ULTRA desativa os limitadores termicos Qualcomm e o throttling de tela acesa.\n\nVoce declara estar ciente dos riscos de temperatura e desgaste, isentando expressamente o autor @cai0fps de qualquer responsabilidade por eventuais problemas ou danos ao aparelho.\n\nDeseja ativar o Modo ULTRA mesmo assim?");
+                if (!agree) return;
+            }
             const cfg = `PROFILE=${prof}\\nMAX_PERCENT=100\\nCOOLING_PRIORITY=${cooling}\\nBYPASS_THERMAL=${bypassThermal}\\nSCREEN_ON_BYPASS=${screenBypass}\\nFORCE_SFC=1\\n`;
             await exec(`echo "${cfg}" > /data/adb/modules/galaxy_a05s_pps_unlock/config.prop`);
             const k = (typeof ksu !== "undefined") ? ksu : (window.ksu || null);
