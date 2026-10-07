@@ -224,24 +224,57 @@ O daemon em segundo plano monitora em tempo real a negociação USB-PD e emite u
 
 ---
 
-## 📁 Estrutura de Arquivos
+## 📁 Estrutura de Arquivos e Repositório
+
+O repositório disponibiliza os arquivos completos do módulo tanto diretamente na raiz (padrão de repositórios Magisk / KernelSU, garantindo que URLs raw não retornem 404) quanto espelhados em `module_package/` para o empacotador:
 
 ```
-Galaxy_A05s_SuperFastCharge_v1.6.zip
+Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
 ├── module.prop                  # Metadados e versão do módulo v1.6
-├── customize.sh                 # Novo menu com cursor interativo via botões de volume
-├── service.sh                   # Daemon de boot, bypass térmico/tela, arrefecimento e notificações
-├── action.sh                    # Script do botão "Ação" do KernelSU com telemetria
-├── diag.sh                      # Ferramenta de diagnóstico de hardware e qualidade do cabo
+├── service.sh                   # Daemon de boot, detecção térmica dinâmica e arrefecimento
+├── action.sh                    # Script do botão "Ação" do KernelSU com telemetria VBUS/VBAT
+├── customize.sh                 # Menu de instalação interativo via teclas de volume
+├── diag.sh                      # Ferramenta de diagnóstico de barramento e integridade do cabo
 ├── config.prop                  # Perfil ativo selecionado pelo usuário
-├── pps_kp_override.ko           # Driver assinado com kprobes universais
+├── pps_kp_override.ko           # Driver LKM com kprobes (calibrado para Kernel 5.15 Bengal SM6225)
+├── package_module.py            # Script automatizado de validação e empacotamento do ZIP
+├── Galaxy_A05s_SuperFastCharge_v1.6.zip # Pacote instalável gerado
 ├── webroot/
-│   └── index.html               # Dashboard WebUI para KernelSU Next (Diagnóstico + Watts)
-└── META-INF/
-    └── com/google/android/
-        ├── update-binary        # Entrypoint do instalador
-        └── updater-script       # Script de instrução Magisk/KernelSU
+│   └── index.html               # WebUI monocromática (Preto/Branco) para KernelSU Next / MMRL
+├── META-INF/
+│   └── com/google/android/
+│       ├── update-binary        # Entrypoint do instalador
+│       └── updater-script       # Instrução de montagem Magisk/KernelSU
+└── module_package/              # Árvore espelhada para geração do pacote flashable
 ```
+
+---
+
+## 🗺️ Roteiro Arquitetural e Próximos Passos (Source Capabilities → PDO/APDO → RDO → VBUS/IBUS)
+
+A versão atual (v1.6) foca no desbloqueio cirúrgico da restrição de $I < 2.000\text{ mA}$ presente no `pd_policy_manager.ko` de referência da Samsung para o Galaxy A05s (Kernel 5.15 Bengal). Para evoluir o projeto para uma solução de interoperabilidade abrangente, as seguintes etapas de engenharia compõem o roteiro técnico:
+
+1. **Varredura Dinâmica de Assinatura de Instruções**:
+   * Substituir os offsets fixos (`+0x250`, `+0x2b0`) por um motor de busca de padrão binário (*AArch64 instruction pattern matching*) em tempo de carregamento (`insmod`).
+   * Validar se a instrução no ponto do hook corresponde à comparação de corrente antes de aplicar o kprobe, abortando com segurança em builds incompatíveis.
+
+2. **Decodificação Completa de `Source_Capabilities`**:
+   * Interceptar a troca de pacotes de capacidades do carregador diretamente no barramento BMC do chip TCPC (**Richtek RT1711H**).
+   * Efetuar o parse estruturado de cada **Fixed Supply PDO** (5V, 9V, 12V, 15V, 20V) e **Augmented PDO (PPS)** (faixas `3.3V–5.9V`, `3.3V–11.0V`, `3.3V–16.0V`, `3.3V–21.0V`).
+
+3. **Construção Dinâmica do Pacote RDO**:
+   * Em vez de impor uma tensão fixa de 9.000 mV, calcular dinamicamente a tensão ideal dentro do intervalo $[V_{\min}, V_{\max}]$ anunciado no APDO selecionado.
+   * Respeitar rigorosamente a corrente máxima anunciada pela fonte, prevenindo desarmes de sobrecorrente (OCP) na fonte de alimentação.
+
+4. **Telemetria de Entrada Real (VBUS & IBUS Diretos)**:
+   * Leitura direta dos registradores de telemetria do RT1711H via nós do sysfs do TCPC (`/sys/class/typec/...`).
+   * Apresentação segregada no dashboard:
+     - **Potência de Entrada Medida**: $P_{bus} = V_{bus} \times I_{bus}$
+     - **Potência Entregue à Célula**: $P_{bat} = V_{bat} \times I_{bat}$
+     - **Eficiência Real de Conversão do SP2130**: $\eta = \frac{P_{bat}}{P_{bus}}$
+
+5. **Expansão de Protocolos Proprietários**:
+   * Extensão da camada de negociação para **Samsung Adaptive Fast Charging (AFC 9V)**, **Qualcomm Quick Charge (QC 2.0/3.0)** e perfis USB-PD Fixed (para fontes sem suporte a PPS).
 
 ---
 
@@ -265,7 +298,7 @@ Galaxy_A05s_SuperFastCharge_v1.6.zip
 * **Abrangência Universal:** O consentimento e a assunção de risco aplicam-se ao **módulo em sua totalidade, abrangendo todo e qualquer modo de operação (Modo 1: Normal, Modo 2: Inteligente e Modo 3: ULTRA)**.
 * **Isenção de Custos e Reparações:** O autor ([@cai0fps](https://github.com/cai0fps)) **NÃO arca, não indeniza e não se responsabiliza sob nenhuma hipótese por quaisquer custos, reparos, prejuízos, avarias ou problemas causados** direta ou indiretamente ao aparelho ou a terceiros.
 * **Consentimento Informado:** Ao baixar, clonar, instalar ou utilizar este módulo em qualquer dispositivo ou configuração, o usuário declara **ciência plena, prévia e inequívoca de todos os riscos operacionais, elétricos e térmicos**, manifestando seu **consentimento livre e irrevogável** e assumindo **100% de responsabilidade civil, técnica e financeira** por quaisquer eventos decorrentes do seu uso.
-* **Modo 3 (ULTRA / Alta Potência):** Ressalta-se que o Modo ULTRA opera sem os limitadores térmicos do daemon Qualcomm (`cooling_device26/27`) e sem o limite de tela ligada da OneUI (SIOP), destinando-se a testes de bancada sob monitoramento ativo do próprio usuário.
+* **Modo 3 (ULTRA / Alta Potência):** O Modo ULTRA realiza busca dinâmica por dispositivos de arrefecimento da bateria (`/sys/class/thermal/cooling_device*`) para relaxar o throttling sob temperatura estritamente segura ($< 38^\circ\text{C}$). Conta com histerese de segurança: caso a bateria atinja $40^\circ\text{C}$, o módulo cessa imediatamente a intervenção e devolve o controle ao kernel para proteger o hardware.
 
 ---
 
@@ -284,7 +317,7 @@ Para garantir a máxima integridade do seu aparelho e evitar acidentes ou desgas
 4. **Remoção de Capinhas Protetoras Espessas:**
    * Capas de proteção muito espessas (como capas de couro ou borracha pesada anti-impacto) retêm o calor irradiado pela carcaça traseira. Recomenda-se retirá-las durante sessões de carregamento rápido no Modo ULTRA.
 5. **Recomendação para Uso Cotidiano:**
-   * Para o uso diário, o perfil recomendado é o **Modo 2 (Inteligente)**, pois ele atinge os 25W completos e aciona o arrefecimento dinâmico de CPU com a tela apagada, mantendo o chassi frio e preservando as margens originais de segurança.
+   * Para o uso diário, o perfil recomendado é o **Modo 2 (Inteligente)**, pois ele permite a negociação de potência máxima suportada pela fonte e aciona o arrefecimento dinâmico de CPU com a tela apagada, mantendo o chassi frio e preservando as margens originais de segurança.
 6. **Aferição e Monitoramento Periódico:**
    * Utilize o botão **"Ação"** no KernelSU para monitorar a temperatura da bateria (`temp_c`) e da carcaça (`quiet-therm`). Caso a bateria alcance temperaturas anômalas ($> 45^\circ\text{C}$ contínuos), desconecte o carregador e aguarde o arrefecimento natural do dispositivo.
 

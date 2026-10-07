@@ -228,24 +228,57 @@ The background daemon dynamically monitors USB-PD negotiations and dispatches an
 
 ---
 
-## 📁 File Structure
+## 📁 Repository & File Structure
+
+The repository maintains the complete module files directly at the root (standard for Magisk / KernelSU modules to ensure raw GitHub URLs never return 404) while also maintaining `module_package/` for zip packing:
 
 ```
-Galaxy_A05s_SuperFastCharge_v1.6.zip
-├── module.prop                  # Module metadata (v1.6 Universal)
-├── customize.sh                 # Interactive volume cursor installer (bilingual)
-├── service.sh                   # Boot daemon, dynamic config reload, thermal bypass & notifications
-├── action.sh                    # KernelSU "Action" telemetry script (bilingual)
-├── diag.sh                      # Hardware and cable quality diagnostic tool (bilingual)
+Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
+├── module.prop                  # Module metadata (v1.6)
+├── service.sh                   # Boot daemon, dynamic thermal detection & cooldown
+├── action.sh                    # KernelSU "Action" telemetry script (VBUS/VBAT)
+├── customize.sh                 # Interactive volume cursor installer
+├── diag.sh                      # Hardware and cable quality diagnostic tool
 ├── config.prop                  # Active user profile configuration
-├── pps_kp_override.ko           # Signed universal kprobe kernel driver
+├── pps_kp_override.ko           # LKM kernel driver with kprobes (calibrated for Kernel 5.15 Bengal SM6225)
+├── package_module.py            # Automated zip packager and permission verifier
+├── Galaxy_A05s_SuperFastCharge_v1.6.zip # Generated flashable module package
 ├── webroot/
-│   └── index.html               # WebUI dashboard with diagnostic & Watts calculation
-└── META-INF/
-    └── com/google/android/
-        ├── update-binary        # Installer entrypoint
-        └── updater-script       # Magisk/KernelSU instruction script
+│   └── index.html               # Clean monochrome (Black/White) WebUI dashboard
+├── META-INF/
+│   └── com/google/android/
+│       ├── update-binary        # Installer entrypoint
+│       └── updater-script       # Magisk/KernelSU instruction script
+└── module_package/              # Mirrored tree for flashable packaging
 ```
+
+---
+
+## 🗺️ Architectural Roadmap & Next Steps (Source Capabilities → PDO/APDO → RDO → VBUS/IBUS)
+
+The current release (v1.6) targets the specific $I < 2,000\text{ mA}$ restriction within Samsung's reference `pd_policy_manager.ko` (Kernel 5.15 Bengal). To evolve into an extensible universal charging framework, the following architectural milestones are defined:
+
+1. **Dynamic Instruction Pattern Scanning**:
+   * Replace fixed opcode offsets (`+0x250`, `+0x2b0`) with an in-memory AArch64 instruction pattern scanner at load time (`insmod`).
+   * Verify the exact comparison instruction prior to arming the kprobes, aborting safely if a mismatched kernel build is detected.
+
+2. **Full `Source_Capabilities` Decoding**:
+   * Intercept raw capability packets exchanged over the BMC configuration channel of the **Richtek RT1711H** TCPC PHY.
+   * Parse all advertised **Fixed Supply PDOs** (5V, 9V, 12V, 15V, 20V) and **Augmented PDOs (PPS)** (ranges `3.3V–5.9V`, `3.3V–11.0V`, `3.3V–16.0V`, `3.3V–21.0V`).
+
+3. **Dynamic RDO Synthesis**:
+   * Replace the fixed 9,000 mV request with dynamic voltage optimization bounded by $[V_{\min}, V_{\max}]$ advertised by the selected APDO.
+   * Strictly enforce the maximum current advertised by the source to prevent overcurrent protection (OCP) tripping.
+
+4. **Direct Physical Telemetry (True VBUS & IBUS Sensing)**:
+   * Interface directly with RT1711H TCPC sysfs nodes (`/sys/class/typec/...`).
+   * Clearly segregate electrical domains on the dashboard:
+     - **Input Power**: $P_{bus} = V_{bus} \times I_{bus}$
+     - **Delivered Chemical Power**: $P_{bat} = V_{bat} \times I_{bat}$
+     - **Real SP2130 Conversion Efficiency**: $\eta = \frac{P_{bat}}{P_{bus}}$
+
+5. **Proprietary Fast-Charging Protocol Expansion**:
+   * Extend the negotiation engine to support **Samsung Adaptive Fast Charging (AFC 9V)**, **Qualcomm Quick Charge (QC 2.0/3.0)**, and Fixed USB-PD profiles for non-PPS chargers.
 
 ---
 
@@ -269,6 +302,7 @@ Galaxy_A05s_SuperFastCharge_v1.6.zip
 * **Universal Scope:** Consent and assumption of risk apply to the **module in its entirety and across all operational profiles (Mode 1: Normal, Mode 2: Smart, Mode 3: ULTRA)**.
 * **No Reimbursement or Liability:** The author ([@cai0fps](https://github.com/cai0fps)) **DOES NOT bear any liability and will NOT reimburse, repair, or compensate for any damages or problems caused directly or indirectly**.
 * **Informed Consent:** By downloading, flashing, or using this module, the user explicitly confirms **full awareness of all electrical, thermal, and operational risks**, providing **irrevocable consent** and assuming **100% of all civil, financial, and technical responsibility**.
+* **Mode 3 (ULTRA / High Power):** Mode 3 dynamically scans battery thermal cooling devices (`/sys/class/thermal/cooling_device*`) to relax mitigations only while temperature remains safe ($< 38^\circ\text{C}$). If temperature reaches $40^\circ\text{C}$, the module automatically yields control back to kernel thermal policies.
 
 ---
 
@@ -279,7 +313,7 @@ To protect your device and ensure safe operation:
 2. **Quality 3A USB-C Cables:** Use intact, high-gauge Type-C cables rated for $\ge 3\text{A}$ with healthy Configuration Channel (CC) lines.
 3. **Adequate Ventilation:** Never charge the phone under pillows, blankets, or inside backpacks.
 4. **Remove Thick Cases:** Heavy protective cases act as thermal insulators; remove them during high-power charging sessions.
-5. **Daily Driving:** Mode 2 (Smart) is recommended for daily use, delivering full 25W charging while keeping the chassis cool during standby.
+5. **Daily Driving:** Mode 2 (Smart) is recommended for daily use, negotiating maximum charger power while keeping the chassis cool during standby.
 6. **Temperature Monitoring:** If battery temperature exceeds $45^\circ\text{C}$ continuously, unplug the charger and allow the device to cool down.
 
 ---

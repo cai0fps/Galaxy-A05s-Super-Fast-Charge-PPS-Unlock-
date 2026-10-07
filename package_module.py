@@ -4,34 +4,53 @@ import shutil
 import hashlib
 
 out_zip = 'Galaxy_A05s_SuperFastCharge_v1.6.zip'
-src_dir = 'module_package'
 
-def file_hash(path):
-    if not os.path.exists(path):
-        return None
-    h = hashlib.sha256()
-    with open(path, 'rb') as f:
-        while chunk := f.read(65536):
-            h.update(chunk)
-    return h.hexdigest()
+# Module files to sync and package
+files_to_sync = [
+    'action.sh',
+    'config.prop',
+    'customize.sh',
+    'diag.sh',
+    'module.prop',
+    'pps_kp_override.ko',
+    'service.sh',
+]
 
-# Ensure pps_kp_override.ko is up to date in module_package
-ko_src = 'pps_kprobe_override.ko'
-ko_dst = os.path.join(src_dir, 'pps_kp_override.ko')
+dir_pairs = [
+    ('webroot', 'module_package/webroot'),
+    ('META-INF', 'module_package/META-INF'),
+]
 
-if os.path.exists(ko_src):
-    if not os.path.exists(ko_dst) or file_hash(ko_src) != file_hash(ko_dst):
-        print(f"[*] Sincronizando {ko_src} -> {ko_dst} (conteudo modificado)...")
-        shutil.copyfile(ko_src, ko_dst)
-elif not os.path.exists(ko_dst):
-    raise FileNotFoundError(f"Erro: Arquivo do driver '{ko_src}' nem '{ko_dst}' foram encontrados!")
+# Ensure module_package directory exists
+os.makedirs('module_package', exist_ok=True)
+
+# Sync root files to module_package
+for f in files_to_sync:
+    if os.path.exists(f):
+        dst = os.path.join('module_package', f)
+        if not os.path.exists(dst) or open(f, 'rb').read() != open(dst, 'rb').read():
+            print(f"[*] Sincronizando {f} -> {dst}...")
+            shutil.copy2(f, dst)
+
+for src_d, dst_d in dir_pairs:
+    if os.path.exists(src_d):
+        os.makedirs(dst_d, exist_ok=True)
+        for root, dirs, files in os.walk(src_d):
+            for file in files:
+                sf = os.path.join(root, file)
+                rel = os.path.relpath(sf, src_d)
+                df = os.path.join(dst_d, rel)
+                os.makedirs(os.path.dirname(df), exist_ok=True)
+                if not os.path.exists(df) or open(sf, 'rb').read() != open(df, 'rb').read():
+                    print(f"[*] Sincronizando {sf} -> {df}...")
+                    shutil.copy2(sf, df)
 
 # Criar ZIP preservando permissoes executaveis do Linux (0755)
 with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-    for root, dirs, files in os.walk(src_dir):
+    for root, dirs, files in os.walk('module_package'):
         for file in sorted(files):
             full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, src_dir).replace('\\', '/')
+            rel_path = os.path.relpath(full_path, 'module_package').replace('\\', '/')
             
             with open(full_path, 'rb') as f:
                 data = f.read()
