@@ -6,44 +6,78 @@
     <title>A05s Super Fast Charge</title>
     <style>
         :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --card-border: #334155;
-            --accent: #38bdf8;
-            --accent-green: #22c55e;
-            --accent-amber: #f59e0b;
-            --accent-red: #ef4444;
-            --text: #f8fafc;
-            --text-dim: #94a3b8;
+            --bg: #000000;
+            --card: #0d0d0d;
+            --card-border: #262626;
+            --text: #ffffff;
+            --text-dim: #8e8e93;
+            --text-muted: #555555;
+            --badge-bg: #171717;
+            --badge-border: #333333;
+            --badge-text: #a1a1aa;
+            --badge-active-bg: #ffffff;
+            --badge-active-text: #000000;
+            --terminal-bg: #050505;
+            --terminal-border: #222222;
+            --terminal-text: #f4f4f5;
+            --info-bg: #0a0a0a;
+            --info-border: #262626;
+            --btn-hover: #171717;
+            --btn-active-bg: #1f1f1f;
+            --btn-active-border: #ffffff;
         }
+
+        [data-theme="light"] {
+            --bg: #ffffff;
+            --card: #f4f4f5;
+            --card-border: #e4e4e7;
+            --text: #09090b;
+            --text-dim: #71717a;
+            --text-muted: #a1a1aa;
+            --badge-bg: #e4e4e7;
+            --badge-border: #d4d4d8;
+            --badge-text: #52525b;
+            --badge-active-bg: #09090b;
+            --badge-active-text: #ffffff;
+            --terminal-bg: #fafafa;
+            --terminal-border: #e4e4e7;
+            --terminal-text: #18181b;
+            --info-bg: #f4f4f5;
+            --info-border: #e4e4e7;
+            --btn-hover: #ebebeb;
+            --btn-active-bg: #e4e4e7;
+            --btn-active-border: #09090b;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+        body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; transition: background 0.2s, color 0.2s; }
         .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-        .header h1 { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
-        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-        .badge-active { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
-        .badge-warn { background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+        .header h1 { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; background: var(--badge-bg); color: var(--badge-text); border: 1px solid var(--badge-border); transition: all 0.2s; }
+        .badge-active { background: var(--badge-active-bg); color: var(--badge-active-text); border: 1px solid var(--badge-active-bg); }
+        .badge-warn { background: var(--badge-bg); color: var(--badge-text); border: 1px solid var(--badge-border); }
         
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
         .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; }
         .card-title { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
-        .card-value { font-size: 1.35rem; font-weight: 700; }
+        .card-value { font-size: 1.35rem; font-weight: 700; color: var(--text); }
         .card-sub { font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; }
 
         .section-title { font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; margin: 18px 0 8px 0; font-weight: 600; }
         .btn-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         button { background: var(--card); border: 1px solid var(--card-border); color: var(--text); padding: 12px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; text-align: left; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        button:hover { background: var(--btn-hover); }
         button:active { transform: scale(0.98); }
-        button.active { border-color: var(--accent); background: rgba(56, 189, 248, 0.15); }
+        button.active { border-color: var(--btn-active-border); background: var(--btn-active-bg); }
 
-        .terminal-card { background: #000; border: 1px solid #222; border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.74rem; color: #10b981; min-height: 340px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+        .terminal-card { background: var(--terminal-bg); border: 1px solid var(--terminal-border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.74rem; color: var(--terminal-text); min-height: 340px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 
-        .info-card { background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 10px; padding: 14px; margin-top: 18px; margin-bottom: 18px; font-size: 0.76rem; line-height: 1.5; color: var(--text-dim); }
-        .info-title { font-weight: 700; color: var(--accent); margin-bottom: 10px; font-size: 0.85rem; }
+        .info-card { background: var(--info-bg); border: 1px solid var(--info-border); border-radius: 10px; padding: 14px; margin-top: 18px; margin-bottom: 18px; font-size: 0.76rem; line-height: 1.5; color: var(--text-dim); }
+        .info-title { font-weight: 700; color: var(--text); margin-bottom: 10px; font-size: 0.85rem; }
         .info-item { margin-bottom: 9px; }
         .info-item:last-child { margin-bottom: 0; }
         .info-item strong { color: var(--text); }
-        .info-item code { background: rgba(0, 0, 0, 0.45); padding: 2px 5px; border-radius: 4px; color: var(--accent-green); font-size: 0.72rem; }
+        .info-item code { background: var(--card-border); padding: 2px 5px; border-radius: 4px; color: var(--text); font-size: 0.72rem; }
     </style>
 </head>
 <body>
@@ -52,9 +86,10 @@
             <h1>Galaxy A05s</h1>
             <div id="txt-sub" style="font-size: 0.75rem; color: var(--text-dim);">Super Fast Charge 25W (@cai0fps)</div>
         </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="btn-lang" onclick="toggleLang()" style="padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; margin: 0; min-height: 0; width: auto; background: var(--card); border: 1px solid var(--card-border); color: var(--accent); cursor: pointer; display: inline-flex;">🌐 EN</button>
-            <span id="pps-badge" class="badge badge-warn">Verificando...</span>
+        <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-theme" onclick="toggleTheme()" style="padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; margin: 0; min-height: 0; width: auto; background: var(--card); border: 1px solid var(--card-border); color: var(--text); cursor: pointer; display: inline-flex;">◐ Preto/Branco</button>
+            <button id="btn-lang" onclick="toggleLang()" style="padding: 4px 10px; font-size: 0.72rem; border-radius: 6px; margin: 0; min-height: 0; width: auto; background: var(--card); border: 1px solid var(--card-border); color: var(--text); cursor: pointer; display: inline-flex;">🌐 EN</button>
+            <span id="pps-badge" class="badge">Verificando...</span>
         </div>
     </div>
 
@@ -67,17 +102,17 @@
         </div>
         <div class="card">
             <div id="title-current" class="card-title">Corrente Real</div>
-            <div id="val-ibat" class="card-value" style="color: var(--accent-green);">-- mA</div>
+            <div id="val-ibat" class="card-value">-- mA</div>
             <div id="val-cabo" class="card-sub">Cabo: -- mA (÷2)</div>
         </div>
         <div class="card">
             <div id="title-power-bat" class="card-title">Potência Dividida</div>
-            <div id="val-power-bat" class="card-value" style="color: var(--accent);">-- W</div>
+            <div id="val-power-bat" class="card-value">-- W</div>
             <div id="val-power-bat-sub" class="card-sub">Célula (~4.4V × I)</div>
         </div>
         <div class="card">
             <div id="title-power-src" class="card-title">Potência da Fonte</div>
-            <div id="val-power-src" class="card-value" style="color: var(--accent-green);">-- W</div>
+            <div id="val-power-src" class="card-value">-- W</div>
             <div id="val-power-src-sub" class="card-sub">Tensão da Fonte</div>
         </div>
         <div class="card">
@@ -100,24 +135,24 @@
         </button>
         <button id="btn-smart" onclick="setProfile('SMART', 1, 0, 0)">
             <span id="btn-smart-title">Modo 2: Inteligente (100%)</span>
-            <span id="btn-smart-sub" style="font-size: 0.7rem; color: var(--accent);">Arrefecimento Ativo</span>
+            <span id="btn-smart-sub" style="font-size: 0.7rem; color: var(--text-dim);">Arrefecimento Ativo</span>
         </button>
         <button id="btn-ultra" onclick="setProfile('ULTRA', 2, 1, 1)">
             <span id="btn-ultra-title">Modo 3: ULTRA / Máxima Potência</span>
-            <span id="btn-ultra-sub" style="font-size: 0.7rem; color: var(--accent-green);">25W Forçado + Bypass Térmico</span>
+            <span id="btn-ultra-sub" style="font-size: 0.7rem; color: var(--text-dim);">25W Forçado + Bypass Térmico</span>
         </button>
     </div>
 
     <div id="title-section-diag" class="section-title">Diagnóstico de Hardware & Cabo</div>
     <div style="margin-bottom: 20px;">
-        <button id="btn-run-diag" onclick="runDiagnostic()" style="width: 100%; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); display: flex; justify-content: space-between; align-items: center; padding: 13px 16px;">
+        <button id="btn-run-diag" onclick="runDiagnostic()" style="width: 100%; border: 1px solid var(--card-border); background: var(--card); display: flex; justify-content: space-between; align-items: center; padding: 13px 16px;">
             <span style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 1.1rem;">🔍</span>
-                <span id="txt-diag-btn" style="color: var(--accent); font-weight: 700;">Executar Diagnóstico do Sistema</span>
+                <span id="txt-diag-btn" style="color: var(--text); font-weight: 700;">Executar Diagnóstico do Sistema</span>
             </span>
             <span id="txt-diag-hint" style="font-size: 0.72rem; color: var(--text-dim);">Testar Cabo & SP2130</span>
         </button>
-        <div id="diag-container" style="display: none; margin-top: 10px; background: #000; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.73rem; color: #38bdf8; line-height: 1.45; white-space: pre-wrap; word-break: break-word;">
+        <div id="diag-container" style="display: none; margin-top: 10px; background: var(--terminal-bg); border: 1px solid var(--terminal-border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 0.73rem; color: var(--terminal-text); line-height: 1.45; white-space: pre-wrap; word-break: break-word;">
             <div id="diag-loading" style="color: var(--text-dim);">Avaliando barramento I2C, kprobe e condutividade do cabo...</div>
             <div id="diag-content"></div>
         </div>
@@ -133,7 +168,7 @@
     </div>
 
     <!-- Termo de Responsabilidade & Consentimento -->
-    <div id="disclaimer-box" style="margin-top: 0; margin-bottom: 24px; padding: 12px 14px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; font-size: 0.72rem; color: #fca5a5; line-height: 1.4;">
+    <div id="disclaimer-box" style="margin-top: 0; margin-bottom: 24px; padding: 12px 14px; background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; font-size: 0.72rem; color: var(--text-dim); line-height: 1.4;">
         ⚠️ <strong>Termo de Responsabilidade & Consentimento:</strong> O uso deste módulo como um todo e em qualquer perfil é estritamente experimental. O usuário declara pleno consentimento e assume 100% da responsabilidade por quaisquer problemas, danos materiais ou desgaste do aparelho. O desenvolvedor <strong>@cai0fps</strong> isenta-se expressamente de quaisquer danos ou problemas decorrentes do uso.
     </div>
 
@@ -201,6 +236,8 @@
         const i18n = {
             pt: {
                 btnLang: "🌐 EN",
+                themeDark: "◐ Preto/Branco",
+                themeLight: "◑ Branco/Preto",
                 badgeChecking: "Verificando...",
                 badgeActive: "PPS 9V (25W)",
                 badgeFast: "AFC 9V (15W)",
@@ -246,6 +283,8 @@
             },
             en: {
                 btnLang: "🌐 PT",
+                themeDark: "◐ Black/White",
+                themeLight: "◑ White/Black",
                 badgeChecking: "Checking...",
                 badgeActive: "25W PPS (9V)",
                 badgeFast: "AFC 9V (15W)",
@@ -292,11 +331,33 @@
         };
 
         let currentLang = localStorage.getItem("pps_lang") || ((navigator.language || navigator.userLanguage || "en").toLowerCase().startsWith("pt") ? "pt" : "en");
+        let currentTheme = localStorage.getItem("pps_theme") || "dark";
+
+        function applyTheme() {
+            const t = i18n[currentLang] || i18n.pt;
+            if (currentTheme === "light") {
+                document.documentElement.setAttribute("data-theme", "light");
+            } else {
+                document.documentElement.removeAttribute("data-theme");
+            }
+            const btnTheme = document.getElementById("btn-theme");
+            if (btnTheme) {
+                btnTheme.innerText = currentTheme === "light" ? t.themeLight : t.themeDark;
+            }
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === "dark" ? "light" : "dark";
+            localStorage.setItem("pps_theme", currentTheme);
+            applyTheme();
+        }
 
         function applyLang() {
             const t = i18n[currentLang] || i18n.en;
             const btnLang = document.getElementById("btn-lang");
             if (btnLang) btnLang.innerText = t.btnLang;
+
+            applyTheme();
             
             document.getElementById("title-bat").innerText = t.cardBat;
             document.getElementById("title-current").innerText = t.cardCurrent;
@@ -408,11 +469,11 @@
                 if (ibat !== "--") {
                     if (isDisconnected) {
                         valIbatEl.innerText = "-" + iNum + " mA";
-                        valIbatEl.style.color = "var(--accent-amber)";
+                        valIbatEl.style.color = "var(--text-dim)";
                         valCaboEl.innerText = (currentLang === "pt") ? "Sem Cabo (Em Bateria)" : "No Cable (On Battery)";
                     } else if (isNetDischarge) {
                         valIbatEl.innerText = "-" + iNum + " mA";
-                        valIbatEl.style.color = "var(--accent-amber)";
+                        valIbatEl.style.color = "var(--text-dim)";
                         if (isUsbPc) {
                             valCaboEl.innerText = (currentLang === "pt") ? "Cabo: ~400-500 mA (USB 5V)" : "Cable: ~400-500 mA (5V USB)";
                         } else {
@@ -420,7 +481,7 @@
                         }
                     } else {
                         valIbatEl.innerText = "+" + iNum + " mA";
-                        valIbatEl.style.color = "var(--accent-green)";
+                        valIbatEl.style.color = "var(--text)";
                         if (isPPS) {
                             valCaboEl.innerText = (currentLang === "pt" ? "Cabo: ~" : "Cable: ~") + Math.round(iNum / 2) + " mA (÷2 SP2130)";
                         } else if (isAFC) {
@@ -436,14 +497,14 @@
                             const wattsBat = (vNum * iNum / 1000).toFixed(1);
                             if (isDisconnected) {
                                 valPowerBatEl.innerText = "-" + wattsBat + " W";
-                                valPowerBatEl.style.color = "var(--accent-amber)";
+                                valPowerBatEl.style.color = "var(--text-dim)";
                                 valPowerBatSubEl.innerText = (currentLang === "pt") ? "Consumo do Aparelho" : "Device Consumption";
                                 valPowerSrcEl.innerText = "0.0 W";
                                 valPowerSrcEl.style.color = "var(--text-dim)";
                                 valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Desconectado" : "Disconnected";
                             } else if (isNetDischarge) {
                                 valPowerBatEl.innerText = "-" + wattsBat + " W";
-                                valPowerBatEl.style.color = "var(--accent-amber)";
+                                valPowerBatEl.style.color = "var(--text-dim)";
                                 valPowerBatSubEl.innerText = (currentLang === "pt") ? "Déficit Líquido" : "Net Deficit";
                                 if (isUsbPc) {
                                     valPowerSrcEl.innerText = "~2.5 W";
@@ -456,18 +517,18 @@
                                 }
                             } else {
                                 valPowerBatEl.innerText = "+" + wattsBat + " W";
-                                valPowerBatEl.style.color = "var(--accent)";
+                                valPowerBatEl.style.color = "var(--text)";
                                 valPowerBatSubEl.innerText = (currentLang === "pt") ? "Célula (~4.4V × I)" : "Cell (~4.4V × I)";
 
                                 if (isPPS) {
                                     const wattsSrc = (vNum * iNum * 1.03 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
-                                    valPowerSrcEl.style.color = "var(--accent-green)";
+                                    valPowerSrcEl.style.color = "var(--text)";
                                     valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte ~9.0V (PPS 25W)" : "Source ~9.0V (25W PPS)";
                                 } else if (isAFC) {
                                     const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
-                                    valPowerSrcEl.style.color = "var(--accent-amber)";
+                                    valPowerSrcEl.style.color = "var(--text)";
                                     valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 9.0V (AFC 15W)" : "Source 9.0V (AFC 15W)";
                                 } else {
                                     // PC USB ou Carregador Comum de 5V
@@ -494,7 +555,7 @@
                 const badge = document.getElementById("pps-badge");
                 if (isDisconnected) {
                     badge.innerText = t.badgeBattery;
-                    badge.className = "badge badge-warn";
+                    badge.className = "badge";
                 } else if (isPPS) {
                     badge.innerText = t.badgeActive;
                     badge.className = "badge badge-active";
