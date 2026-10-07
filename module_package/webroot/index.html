@@ -423,10 +423,10 @@
                     if (l.indexOf("Nivel Bateria") !== -1 || l.indexOf("Battery Level") !== -1) {
                         const m = l.match(/:\s*(\d+)%/);
                         if (m) soc = m[1];
-                    } else if (l.indexOf("Tensao Célula") !== -1 || l.indexOf("Cell Voltage") !== -1 || l.indexOf("Tensao Bateria") !== -1 || l.indexOf("Battery Voltage") !== -1) {
+                    } else if (l.indexOf("Tensao Célula") !== -1 || l.indexOf("Tensao Celula") !== -1 || l.indexOf("Cell Voltage") !== -1 || l.indexOf("Tensao Bateria") !== -1 || l.indexOf("Battery Voltage") !== -1) {
                         const m = l.match(/:\s*([\d.]+)\s*V/);
                         if (m) vbat = m[1];
-                    } else if (l.indexOf("Corrente Real") !== -1 || l.indexOf("Real Current") !== -1) {
+                    } else if (l.indexOf("Corrente Real") !== -1 || l.indexOf("Real Current") !== -1 || l.indexOf("Corrente Bateria") !== -1 || l.indexOf("Battery Current") !== -1) {
                         const m = l.match(/:\s*([+-]?\d+)\s*mA/);
                         if (m) ibat = m[1];
                     } else if (l.indexOf("Temp. Bateria") !== -1 || l.indexOf("Battery Temp") !== -1) {
