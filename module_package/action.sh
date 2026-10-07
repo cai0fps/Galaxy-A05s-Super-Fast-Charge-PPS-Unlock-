@@ -60,39 +60,41 @@ hvc_val=$(dumpsys battery 2>/dev/null | grep -o 'hvc:[a-z]*' | tail -n 1 | cut -
 is_pps=0
 is_afc=0
 
-# 1. Checagem direta de Direct Charging no driver do kernel
-dc_stat=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
-[ "$dc_stat" != "0" ] && is_pps=1
+# PPS (9V) e AFC (9V) requerem obrigatoriamente alimentacao AC (tomada Type-C PD/PPS/AFC).
+# No barramento USB do PC (usb_val=1, ac_val=0), o fornecimento e restrito a 5V (SDP/CDP).
+if [ "$ac_val" = "1" ]; then
+    # 1. Checagem direta de Direct Charging no driver do kernel
+    dc_stat=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
+    [ "$dc_stat" != "0" ] && is_pps=1
 
-# 1b. Checagem no power_supply do Silergy SP2130 (charger_standalone)
-cp_status_raw=$(cat /sys/class/power_supply/charger_standalone/status 2>/dev/null || echo "")
-[ "$cp_status_raw" = "Charging" ] && is_pps=1
+    # 1b. Checagem no power_supply do Silergy SP2130 (charger_standalone)
+    cp_status_raw=$(cat /sys/class/power_supply/charger_standalone/status 2>/dev/null || echo "")
+    [ "$cp_status_raw" = "Charging" ] && is_pps=1
 
-# 2. charger_type == 3 do Android (Super Fast Charging / PPS)
-if [ "$chg_type" = "3" ]; then
-    is_pps=1
-elif [ "$chg_type" = "2" ]; then
-    is_afc=1
-fi
-
-# 3. High Voltage Charging (HVC)
-if [ "$hvc_val" = "true" ]; then
-    if [ "$ibat_ma" -gt 1800 ] || [ "$dc_stat" != "0" ] || [ "$chg_type" = "3" ] || [ "$cp_status_raw" = "Charging" ]; then
+    # 2. charger_type do Android
+    if [ "$chg_type" = "3" ]; then
         is_pps=1
-    else
+    elif [ "$chg_type" = "2" ]; then
         is_afc=1
     fi
-fi
 
-# 4. Checagem de dmesg recente (negociacao sink_vbus 9000 ou charge pump habilitado)
-if dmesg 2>/dev/null | tail -n 40 | grep -qE "sink_vbus 9000|cp enable: 1|type\(0x84\)"; then
-    is_pps=1
-fi
+    # 3. High Voltage Charging (HVC)
+    if [ "$hvc_val" = "true" ]; then
+        if [ "$ibat_ma" -gt 1800 ] || [ "$dc_stat" != "0" ] || [ "$chg_type" = "3" ] || [ "$cp_status_raw" = "Charging" ]; then
+            is_pps=1
+        else
+            is_afc=1
+        fi
+    fi
 
-# 5. Checagem de hardware: no Galaxy A05s o Buck 5V e limitado a 2A.
-# Qualquer corrente >= 1850mA so e fisicamente possivel no SP2130 (PPS 2:1 a 9V)!
-if [ "$is_charging" = "1" ] && [ "$ibat_ma" -ge 1850 ]; then
-    is_pps=1
+    # 4. Checagem de hardware: no Galaxy A05s o Buck 5V e limitado a 2A.
+    # Qualquer corrente >= 1850mA entrando na celula so e fisicamente possivel no SP2130 (PPS 2:1 a 9V)!
+    if [ "$ibat" -gt 0 ] && [ "$ibat_ma" -ge 1850 ]; then
+        is_pps=1
+    fi
+else
+    is_pps=0
+    is_afc=0
 fi
 
 if [ "$is_pps" = "1" ] && [ "$is_charging" = "1" ]; then
@@ -103,7 +105,11 @@ elif [ "$is_afc" = "1" ] && [ "$is_charging" = "1" ]; then
     [ "$IS_PT" = "1" ] && pps_status="FAST CHARGING (15W AFC/QC 9V)" || pps_status="FAST CHARGING (15W AFC/QC 9V)"
 elif [ "$is_charging" = "1" ]; then
     chg_type=1
-    [ "$IS_PT" = "1" ] && pps_status="PADRAO (5V Comum)" || pps_status="STANDARD (5V Regular)"
+    if [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+        [ "$IS_PT" = "1" ] && pps_status="PADRAO (USB PC 5V)" || pps_status="STANDARD (PC USB 5V)"
+    else
+        [ "$IS_PT" = "1" ] && pps_status="PADRAO (5V Comum)" || pps_status="STANDARD (5V Regular)"
+    fi
 else
     chg_type=0
     [ "$IS_PT" = "1" ] && pps_status="DESCONECTADO (Em Bateria)" || pps_status="DISCONNECTED (On Battery)"
@@ -115,10 +121,17 @@ power_mw=$((vbat_int * ibat_ma / 100))
 
 # Calculo de Potencia da Fonte e Cabo por Protocolo Real
 if [ "$is_charging" = "1" ]; then
-    sign="+"
-    p_label_pt="entregues"
-    p_label_en="delivered"
-    power_w="+$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+    if [ "$ibat" -ge 0 ]; then
+        sign="+"
+        p_label_pt="entregues"
+        p_label_en="delivered"
+        power_w="+$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+    else
+        sign="-"
+        p_label_pt="dreno líquido"
+        p_label_en="net drain"
+        power_w="-$((power_mw / 1000)).$(((power_mw % 1000) / 100))"
+    fi
 
     if [ "$chg_type" = "3" ]; then
         # Super Fast Charging PPS (9V, Charge Pump 2:1 ativo)
@@ -142,14 +155,20 @@ if [ "$is_charging" = "1" ]; then
         power_src_desc_en="AFC Draw (9V)"
     else
         # Carga Padrao / USB do PC (5V, Buck)
-        tensao_cabo="5.0 V (USB PC / Padrão)"
+        if [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+            tensao_cabo="5.0 V (USB PC)"
+            power_src_desc_pt="Consumo USB PC (5V)"
+            power_src_desc_en="PC USB Draw (5V)"
+        else
+            tensao_cabo="5.0 V (Padrao)"
+            power_src_desc_pt="Consumo USB (5V)"
+            power_src_desc_en="USB Draw (5V)"
+        fi
         cabo_ma=$(( (vbat_int * ibat_ma) / 500 ))
         cabo_label_pt="~$cabo_ma mA (USB 5V)"
         cabo_label_en="~$cabo_ma mA (USB 5V)"
         power_src_mw=$((power_mw * 118 / 100))
         power_src_w="$((power_src_mw / 1000)).$(((power_src_mw % 1000) / 100))"
-        power_src_desc_pt="Consumo USB (5V)"
-        power_src_desc_en="USB Draw (5V)"
     fi
 else
     sign="-"

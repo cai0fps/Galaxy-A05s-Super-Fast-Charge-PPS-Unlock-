@@ -22,12 +22,20 @@ elif ! echo "$LOCALE" | grep -qi "pt"; then
 fi
 
 # 1. Coleta de Telemetria Basica
+ac_val=$(cat /sys/class/power_supply/ac/online 2>/dev/null || echo 0)
+usb_val=$(cat /sys/class/power_supply/usb/online 2>/dev/null || echo 0)
+st_val=$(cat /sys/class/power_supply/battery/status 2>/dev/null || echo "")
+if [ "$ac_val" = "1" ] || [ "$usb_val" = "1" ] || [ "$st_val" = "Charging" ] || [ "$st_val" = "Full" ]; then
+    is_charging=1
+else
+    is_charging=0
+fi
+
 vbat=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/voltage_now 2>/dev/null || echo 0)
 ibat=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/current_now 2>/dev/null || echo 0)
 vbat_v="$((vbat / 1000000)).$(((vbat % 1000000) / 10000))"
 ibat_abs=$(( ibat < 0 ? -ibat : ibat ))
 ibat_ma=$(( ibat_abs / 1000 ))
-is_charging=$(( ibat > 0 ? 1 : 0 ))
 
 # 2. Diagnostico do Driver Kprobe
 kprobe_ok=0
@@ -66,8 +74,10 @@ hvc_val=$(dumpsys battery 2>/dev/null | grep -o 'hvc:[a-z]*' | tail -n 1 | cut -
 dc_stat=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
 
 is_pps=0
-if [ "$chg_type" = "3" ] || [ "$dc_stat" != "0" ] || [ "$cp_charging" = "1" ] || { [ "$is_charging" = "1" ] && [ "$ibat_ma" -ge 1850 ]; }; then
-    is_pps=1
+if [ "$ac_val" = "1" ]; then
+    if [ "$chg_type" = "3" ] || [ "$dc_stat" != "0" ] || [ "$cp_charging" = "1" ] || [ "$ibat_ma" -ge 1850 ]; then
+        is_pps=1
+    fi
 fi
 
 # 6. Avaliacao de Qualidade do Cabo USB-C
@@ -92,31 +102,31 @@ elif [ "$is_pps" = "1" ]; then
         if [ "$IS_PT" = "1" ]; then
             cable_rating="EXCELENTE (Grau A+)"
             cable_score="100/100"
-            cable_desc="Cabo de alta condutividade (3A real). Resistencia parasita minima (< 0.15 Ohm). Fluxo de potencia maximo."
+            cable_desc="Fluxo maximo de potencia atingido (>= 2400 mA). Cabo de excelente condutividade suportando entrega de 3A sem perdas perceptiveis."
         else
             cable_rating="EXCELLENT (Grade A+)"
             cable_score="100/100"
-            cable_desc="High conductivity cable (real 3A). Minimal parasitic resistance (< 0.15 Ohm). Peak power throughput."
+            cable_desc="Maximum power throughput reached (>= 2400 mA). Excellent conductivity cable supporting full 3A delivery without noticeable drop."
         fi
     elif [ "$ibat_ma" -ge 1850 ]; then
         if [ "$IS_PT" = "1" ]; then
             cable_rating="MUITO BOM (Grau A)"
             cable_score="88/100"
-            cable_desc="Cabo adequado e estavel para PPS 9V. Resistencia interna controlada (~0.18 Ohm)."
+            cable_desc="Fluxo estavel em regime PPS 9V (~1850 a 2400 mA). Rendimento adequado compativel com o patamar atual de carga da bateria (~50% SOC) e temperatura."
         else
             cable_rating="VERY GOOD (Grade A)"
             cable_score="88/100"
-            cable_desc="Proper stable cable for 9V PPS. Controlled internal resistance (~0.18 Ohm)."
+            cable_desc="Stable throughput in 9V PPS regime (~1850 to 2400 mA). Solid performance matching current battery charge level (~50% SOC) and temperature."
         fi
     else
         if [ "$IS_PT" = "1" ]; then
             cable_rating="MODERADO (Grau B)"
             cable_score="72/100"
-            cable_desc="Cabo com resistencia ligeiramente elevada ou bateria acima de 80% (afunilamento natural de corrente)."
+            cable_desc="Fluxo moderado (< 1850 mA). Tipico em baterias acima de 75-80% (afunilamento natural de saturacao) ou cabo com resistencia mais elevada."
         else
             cable_rating="MODERATE (Grade B)"
             cable_score="72/100"
-            cable_desc="Cable with slight resistance or battery above 80% (natural lithium current taper)."
+            cable_desc="Moderate throughput (< 1850 mA). Typical for battery levels above 75-80% (natural saturation taper) or higher resistance cables."
         fi
     fi
 else
@@ -190,10 +200,17 @@ if [ "$IS_PT" = "1" ]; then
     if [ "$is_pps" = "1" ]; then
         echo "  - Negociacao PPS    : [OK] 9.0V PPS (Super Fast Charging 25W)"
         echo "  - Tensão da Tomada  : ~9.0 V (Negociado via USB-PD 3.0 PPS)"
-    elif [ "$chg_type" = "2" ]; then
+    elif [ "$chg_type" = "2" ] && [ "$ac_val" = "1" ]; then
         echo "  - Negociacao AFC    : [INFO] 9.0V AFC (Adaptive Fast Charging 15W)"
+        echo "  - Tensão da Tomada  : ~9.0 V (Modo AFC Buck Convencional)"
     elif [ "$is_charging" = "1" ]; then
-        echo "  - Negociacao 5V     : [INFO] 5.0V Padrao (USB PC ou Carregador Comum)"
+        if [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+            echo "  - Negociacao USB    : [INFO] 5.0V Porta USB de PC (Dados/Carga Lenta)"
+            echo "  - Tensão da Porta   : 5.0 V (Limite Padrao USB SDP/CDP)"
+        else
+            echo "  - Negociacao 5V     : [INFO] 5.0V Padrao (Carregador Comum)"
+            echo "  - Tensão da Tomada  : 5.0 V (Modo Buck Padrao)"
+        fi
     else
         echo "  - Estado            : Desconectado da Tomada"
     fi
@@ -203,7 +220,11 @@ if [ "$IS_PT" = "1" ]; then
     echo "  - Pontuacao Cabo    : $cable_score"
     if [ "$is_charging" = "1" ]; then
         echo "  - Corrente no Cabo  : ~$cabo_ma mA (Medida Real)"
-        echo "  - Corrente Bateria  : +$ibat_ma mA (Entregue na celula)"
+        if [ "$ibat" -ge 0 ]; then
+            echo "  - Corrente Bateria  : +$ibat_ma mA (Entregue na celula)"
+        else
+            echo "  - Corrente Bateria  : -$ibat_ma mA (Drenagem líquida da bateria)"
+        fi
     fi
     echo "  - Analise Tecnica   : $cable_desc"
     echo ""
@@ -212,6 +233,8 @@ if [ "$IS_PT" = "1" ]; then
         echo " RESULTADO: SISTEMA 100% OPERACIONAL PARA 25W PPS"
     elif [ "$is_charging" = "0" ]; then
         echo " RESULTADO: HARDWARE PRONTO (Conecte na tomada 25W)"
+    elif [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+        echo " RESULTADO: CONECTADO AO PC VIA USB (5.0V Padrao)"
     else
         echo " RESULTADO: CARGA ATIVA EM MODO PADRAO / 5V"
     fi
@@ -258,10 +281,17 @@ else
     if [ "$is_pps" = "1" ]; then
         echo "  - PPS Negotiation   : [OK] 9.0V PPS (Super Fast Charging 25W)"
         echo "  - Source Voltage    : ~9.0 V (Negotiated via USB-PD 3.0 PPS)"
-    elif [ "$chg_type" = "2" ]; then
+    elif [ "$chg_type" = "2" ] && [ "$ac_val" = "1" ]; then
         echo "  - AFC Negotiation   : [INFO] 9.0V AFC (Adaptive Fast Charging 15W)"
+        echo "  - Source Voltage    : ~9.0 V (Conventional AFC Buck Mode)"
     elif [ "$is_charging" = "1" ]; then
-        echo "  - 5V Negotiation    : [INFO] 5.0V Standard (PC USB or Regular Charger)"
+        if [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+            echo "  - USB Negotiation   : [INFO] 5.0V PC USB Port (Data/Slow Charge)"
+            echo "  - Port Voltage      : 5.0 V (Standard USB SDP/CDP Limit)"
+        else
+            echo "  - 5V Negotiation    : [INFO] 5.0V Standard (Regular Charger)"
+            echo "  - Source Voltage    : 5.0 V (Standard Buck Mode)"
+        fi
     else
         echo "  - State             : Disconnected from Outlet"
     fi
@@ -271,7 +301,11 @@ else
     echo "  - Cable Score       : $cable_score"
     if [ "$is_charging" = "1" ]; then
         echo "  - Cable Current     : ~$cabo_ma mA (Real Cable Draw)"
-        echo "  - Battery Current   : +$ibat_ma mA (Delivered to cell)"
+        if [ "$ibat" -ge 0 ]; then
+            echo "  - Battery Current   : +$ibat_ma mA (Delivered to cell)"
+        else
+            echo "  - Battery Current   : -$ibat_ma mA (Net discharge from battery)"
+        fi
     fi
     echo "  - Technical Analysis: $cable_desc"
     echo ""
@@ -280,6 +314,8 @@ else
         echo " RESULT: SYSTEM 100% OPERATIONAL FOR 25W PPS"
     elif [ "$is_charging" = "0" ]; then
         echo " RESULT: HARDWARE READY (Plug into 25W wall charger)"
+    elif [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
+        echo " RESULT: CONNECTED TO PC VIA USB (5.0V Standard)"
     else
         echo " RESULT: ACTIVE CHARGE IN STANDARD / 5V MODE"
     fi

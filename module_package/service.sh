@@ -135,13 +135,14 @@ while true; do
     # NOTIFICACAO NATIVA DO SISTEMA AO ENGATAR PPS 25W
     # ========================================================
     is_pps_active=0
-    if [ "$ac_online" = "1" ]; then
+    # PPS so pode ser engatado se conectado em tomada AC (ac_val=1)
+    if [ "$ac_val" = "1" ]; then
         dc_now=$(cat /sys/class/power_supply/battery/direct_charging_status 2>/dev/null || cat /sys/devices/platform/soc/soc:qcom,nopmi-chg/power_supply/battery/direct_charging_status 2>/dev/null || echo 0)
         cp_st=$(cat /sys/class/power_supply/charger_standalone/status 2>/dev/null || echo "")
         ib_ua=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || echo 0)
-        ib_abs=$(( ib_ua < 0 ? -ib_ua : ib_ua ))
 
-        if [ "$dc_now" != "0" ] || [ "$cp_st" = "Charging" ] || [ "$ib_abs" -ge 1850000 ]; then
+        # Corrente >= 1850mA entrando na celula (positivo) confirma modo SP2130 2:1
+        if [ "$dc_now" != "0" ] || [ "$cp_st" = "Charging" ] || [ "$ib_ua" -ge 1850000 ]; then
             is_pps_active=1
         fi
     fi
@@ -160,11 +161,9 @@ while true; do
             pps_notified=1
         fi
     else
-        if [ "$ac_online" = "0" ]; then
-            if [ "$pps_notified" = "1" ]; then
-                cmd notification cancel "pps_unlock_notif" >/dev/null 2>&1
-                pps_notified=0
-            fi
+        # Ao desconectar da tomada AC, reseta o indicador para notificar na proxima conexao
+        if [ "$ac_val" = "0" ]; then
+            pps_notified=0
         fi
     fi
     

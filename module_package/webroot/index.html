@@ -205,6 +205,7 @@
                 badgeActive: "PPS 9V (25W)",
                 badgeFast: "AFC 9V (15W)",
                 badgeStandard: "PADRÃO 5V",
+                badgeUsb: "USB PC (5V)",
                 badgeBattery: "EM BATERIA",
                 cardBat: "Bateria",
                 cardVbatSub: "Célula 1S",
@@ -249,6 +250,7 @@
                 badgeActive: "25W PPS (9V)",
                 badgeFast: "AFC 9V (15W)",
                 badgeStandard: "STANDARD 5V",
+                badgeUsb: "PC USB (5V)",
                 badgeBattery: "ON BATTERY",
                 cardBat: "Battery",
                 cardVbatSub: "1S Cell",
@@ -382,14 +384,16 @@
                     }
                 }
 
-                const isDischarging = ibat.startsWith("-") || proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
+                const isDisconnected = proto.indexOf("DESCONECTADO") !== -1 || proto.indexOf("DISCONNECTED") !== -1 || proto.indexOf("BATERIA") !== -1 || proto.indexOf("BATTERY") !== -1;
+                const isNetDischarge = ibat.startsWith("-");
+                const isUsbPc = proto.indexOf("USB PC") !== -1 || proto.indexOf("PC USB") !== -1;
                 const iNum = (ibat !== "--") ? Math.abs(parseInt(ibat, 10)) : 0;
                 const isCpOn = cp.indexOf("DESLIGADO") === -1 && cp.indexOf("OFF") === -1 && (cp.indexOf("LIGADO") !== -1 || cp.indexOf("ON") !== -1);
                 const isCpMod = cp.indexOf("MODULADO") !== -1 || cp.indexOf("MODULATED") !== -1;
 
                 // Galaxy A05s: O Buck 5V possui teto de 2000mA. Corrente >= 1850mA so e possivel no SP2130 (9V PPS 2:1)
-                const isPPS = (!isDischarging) && (proto.indexOf("PPS") !== -1 || isCpOn || iNum >= 1850);
-                const isAFC = (!isDischarging) && (!isPPS) && (proto.indexOf("FAST") !== -1 || proto.indexOf("AFC") !== -1);
+                const isPPS = (!isDisconnected) && (!isUsbPc) && (proto.indexOf("PPS") !== -1 || isCpOn || ((!isNetDischarge) && iNum >= 1850));
+                const isAFC = (!isDisconnected) && (!isUsbPc) && (!isPPS) && (proto.indexOf("FAST") !== -1 || proto.indexOf("AFC") !== -1);
 
                 document.getElementById("val-soc").innerText = soc + " %";
                 document.getElementById("val-vbat").innerText = (vbat !== "--") ? `${t.cardVbatSub}: ${vbat} V` : "-- V";
@@ -402,10 +406,18 @@
                 const valPowerSrcSubEl = document.getElementById("val-power-src-sub");
 
                 if (ibat !== "--") {
-                    if (isDischarging) {
+                    if (isDisconnected) {
                         valIbatEl.innerText = "-" + iNum + " mA";
                         valIbatEl.style.color = "var(--accent-amber)";
                         valCaboEl.innerText = (currentLang === "pt") ? "Sem Cabo (Em Bateria)" : "No Cable (On Battery)";
+                    } else if (isNetDischarge) {
+                        valIbatEl.innerText = "-" + iNum + " mA";
+                        valIbatEl.style.color = "var(--accent-amber)";
+                        if (isUsbPc) {
+                            valCaboEl.innerText = (currentLang === "pt") ? "Cabo: ~400-500 mA (USB 5V)" : "Cable: ~400-500 mA (5V USB)";
+                        } else {
+                            valCaboEl.innerText = (currentLang === "pt") ? "Déficit Bateria (Tela Ligada)" : "Battery Deficit (Screen On)";
+                        }
                     } else {
                         valIbatEl.innerText = "+" + iNum + " mA";
                         valIbatEl.style.color = "var(--accent-green)";
@@ -422,13 +434,26 @@
                         const vNum = parseFloat(vbat);
                         if (!isNaN(vNum) && !isNaN(iNum)) {
                             const wattsBat = (vNum * iNum / 1000).toFixed(1);
-                            if (isDischarging) {
+                            if (isDisconnected) {
                                 valPowerBatEl.innerText = "-" + wattsBat + " W";
                                 valPowerBatEl.style.color = "var(--accent-amber)";
                                 valPowerBatSubEl.innerText = (currentLang === "pt") ? "Consumo do Aparelho" : "Device Consumption";
                                 valPowerSrcEl.innerText = "0.0 W";
                                 valPowerSrcEl.style.color = "var(--text-dim)";
                                 valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Desconectado" : "Disconnected";
+                            } else if (isNetDischarge) {
+                                valPowerBatEl.innerText = "-" + wattsBat + " W";
+                                valPowerBatEl.style.color = "var(--accent-amber)";
+                                valPowerBatSubEl.innerText = (currentLang === "pt") ? "Déficit Líquido" : "Net Deficit";
+                                if (isUsbPc) {
+                                    valPowerSrcEl.innerText = "~2.5 W";
+                                    valPowerSrcEl.style.color = "var(--text-dim)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (USB PC)" : "Source 5.0V (PC USB)";
+                                } else {
+                                    valPowerSrcEl.innerText = "~2.5 W";
+                                    valPowerSrcEl.style.color = "var(--text-dim)";
+                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (Padrão)" : "Source 5.0V (Standard)";
+                                }
                             } else {
                                 valPowerBatEl.innerText = "+" + wattsBat + " W";
                                 valPowerBatEl.style.color = "var(--accent)";
@@ -449,7 +474,11 @@
                                     const wattsSrc = (vNum * iNum * 1.18 / 1000).toFixed(1);
                                     valPowerSrcEl.innerText = wattsSrc + " W";
                                     valPowerSrcEl.style.color = "var(--text-dim)";
-                                    valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (USB PC / Comum)" : "Source 5.0V (PC USB / Regular)";
+                                    if (isUsbPc) {
+                                        valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (USB PC)" : "Source 5.0V (PC USB)";
+                                    } else {
+                                        valPowerSrcSubEl.innerText = (currentLang === "pt") ? "Fonte 5.0V (Comum)" : "Source 5.0V (Regular)";
+                                    }
                                 }
                             }
                         }
@@ -463,17 +492,20 @@
                 document.getElementById("val-thermal").innerText = t.cardThermal + ": " + cdev;
 
                 const badge = document.getElementById("pps-badge");
-                if (isPPS) {
+                if (isDisconnected) {
+                    badge.innerText = t.badgeBattery;
+                    badge.className = "badge badge-warn";
+                } else if (isPPS) {
                     badge.innerText = t.badgeActive;
                     badge.className = "badge badge-active";
                 } else if (isAFC) {
                     badge.innerText = t.badgeFast;
                     badge.className = "badge badge-warn";
-                } else if (!isDischarging) {
-                    badge.innerText = t.badgeStandard;
+                } else if (isUsbPc) {
+                    badge.innerText = t.badgeUsb;
                     badge.className = "badge badge-warn";
                 } else {
-                    badge.innerText = t.badgeBattery;
+                    badge.innerText = t.badgeStandard;
                     badge.className = "badge badge-warn";
                 }
             } catch (err) {
