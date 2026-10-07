@@ -47,16 +47,16 @@ Silergy SP2130 (Charge Pump 2:1)             UPM6918 (Buck Charger)
 
 ---
 
-## 🧠 Reverse Engineering the OEM Clamp
+## 🧠 Analysis of APDO < 2,000 mA Rejection Condition
 
-By disassembling `usbpd_pd_contact` within `pd_policy_manager.ko`, the assembly rejection logic was isolated in ARM64:
+By disassembling the `usbpd_pd_contact` routine within Samsung's stock `pd_policy_manager.ko` vendor driver, the instruction responsible for filtering low-current contracts was identified:
 
 ```arm64
-// usbpd_pd_contact (pd_policy_manager.ko)
+// usbpd_pd_contact (pd_policy_manager.ko - reference build)
 +0x1f8:  mov    w20, #-1             // Initialize APDO state = not found
 +0x1fc:  mov    w24, #0x2710         // Voltage ceiling = 10,000 mV (10V)
 ...
-+0x250:  cmp    w4, #0x7d0           // <--- OEM CLAMP: w4 < 2000 mA?
++0x250:  cmp    w4, #0x7d0           // <--- OEM gatekeeper: w4 < 2000 mA?
 +0x254:  b.lt   +0x280               // If less than 2,000 mA, DISCARD APDO!
 ...
 +0x2a8:  mov    w2, #0x2328          // Default target voltage = 9000 mV
@@ -67,18 +67,23 @@ By disassembling `usbpd_pd_contact` within `pd_policy_manager.ko`, the assembly 
 
 ### Dynamic Kernel Hook Mechanism (`pps_kp_override.ko`):
 1. **Pre-Handler 1 (`+0x250`)**:
-   * Reads advertised charger current directly from register `regs->regs[4]`.
-   * If lower than 2,000 mA, stores the real value in internal control memory (`[kp1 + 0x80]`) and elevates `regs->regs[4]` temporarily to 2,000 to cleanly pass the OEM threshold test.
+   * Reads the charger's advertised current from `regs->regs[4]`.
+   * If lower than 2,000 mA (such as 18W–20W chargers advertising 1,800 mA), stores the advertised current and temporarily replaces `regs->regs[4]` with 2,000 mA to pass verification without discarding the APDO.
 2. **Pre-Handler 2 (`+0x2b0`)**:
-   * Intercepts the USB Request Data Object (RDO) creation.
-   * Restores the authentic advertised current into `regs->regs[3]`.
-   * The transmitted RDO packet accurately reflects the connected power brick's capabilities, preventing primary-side overcurrent tripping.
+   * Intercepts the Request Data Object (RDO) creation.
+   * Restores the charger's authentic advertised current into `regs->regs[3]`.
+   * This ensures the device never requests more current than the power supply is rated to deliver.
+
+> [!WARNING]
+> **Scope & ABI Dependency:**
+> - The condition at `+0x250` specifically addresses the **rejection of chargers advertising $< 2,000\text{ mA}$** (such as 18W–20W units at 1.8A). Genuine 25W chargers advertising $\ge 2,000\text{ mA}$ (e.g., 2.25A or 2.77A) are not discarded by this instruction. Therefore, this hook resolves compatibility for lower-current PPS chargers rather than acting as a universal 25W override.
+> - The offsets `+0x250` and `+0x2b0`, as well as registers $x3$/$x4$, are compiled specifically for Samsung's reference kernel build. Security patches or alternative kernels may shift addresses or alter register allocation.
 
 ---
 
 ## 📊 Protocol Decoding: Raw Transmitted RDO
 
-During hardware validation with a 20W wall charger (APDO `3300–11000 mV @ 1800 mA`), the raw Request packet transmitted by the TCPC PHY chip was captured:
+During hardware testing with a 20W charger (APDO `3300–11000 mV @ 1800 mA`), the raw Request Data Object transmitted by the TCPC PHY was captured:
 
 ```text
 < 2423.777>TCPC-PE:NewReq, rdo:0x53038424
@@ -99,33 +104,43 @@ During hardware validation with a 20W wall charger (APDO `3300–11000 mV @ 1800
 | **Output Voltage** | [19..9] | `450` (`0x1C2`) | $450 \times 20\text{ mV} = \mathbf{9,000\text{ mV}}$ |
 | **Operating Current** | [6..0] | `36` (`0x24`) | $36 \times 50\text{ mA} = \mathbf{1,800\text{ mA}}$ |
 
+> [!NOTE]
+> **Contract Interpretation:** RDO `0x53038424` confirms that the device successfully negotiated a PPS contract of **$9.0\text{ V} @ 1.8\text{ A}$ ($16.2\text{ W}$ maximum at VBUS)**. It proves that the PPS handshake succeeded on a charger that was previously relegated to 5V slow charging. However, **it does not demonstrate 25W**, as the test adapter is physically capped at 16.2W. Higher charging power requires an adapter with a corresponding APDO (e.g., 9V @ 2.25A = 20.25W; 9V @ 2.77A = 25W).
+
 ---
 
-## ⚡ Physics of Charging: VBUS vs VBAT Explained
+## ⚡ Power Flow Architecture: VBUS, Charge Pump, and Battery
 
-Understanding the power path helps interpret diagnostic measurements accurately:
+Accurate interpretation requires distinguishing the different stages of the charging circuit:
 
-### 1. Bus Voltage ($V_{bus}$) vs Battery Voltage ($V_{bat}$)
-* **VBUS (USB Cable)**: Negotiated PPS voltage typically runs between **~9.0V and 9.7V** inside the cable. This higher voltage allows higher power transfer with less cable current, minimizing resistive heat loss ($P_{\text{loss}} = R \times I^2$).
-* **Battery Cell (1S Li-Ion)**: Operates strictly between **~3.4V (0%)** and **~4.40V (100%)**. Voltages above this range cannot be applied directly across the battery cell.
+```
+[ Charger ] ──(VBUS: ~9.0V / Ibus)──► [ SP2130 Charge Pump 2:1 ] ──(VBAT: ~4.0V / Ibat)──► [ Battery Cell ]
+  P_contract = V_apdo × I_apdo            η ≈ 97%                                           P_bat = V_bat × I_bat
+  (Physical ceiling)                     I_bat ≈ 2 × I_bus × η                             (Net chemical storage)
+```
+
+### 1. Contract Ceiling vs Input Power ($P_{bus}$)
+* **Contract Ceiling ($P_{\text{contract}}$)**: Determined by the active APDO.
+  * 20W Charger (APDO 9V @ 1.8A): Physical ceiling of **$16.2\text{ W}$**.
+  * 25W Charger (APDO 9V @ 2.77A): Physical ceiling of **$25.0\text{ W}$**.
+* **Measured Input Power ($P_{bus} = V_{bus} \times I_{bus}$)**:
+  * Operating at an intermediate charging state with the 9V @ 1.8A contract active, bus current registered $I_{bus} \approx 1.39\text{ A}$.
+  * Input cable power: $9.0\text{ V} \times 1.39\text{ A} \approx \mathbf{12.5\text{ W}}$.
 
 ### 2. 2:1 Down-Conversion by the SP2130 Charge Pump
-The **Silergy SP2130** acts as a switched-capacitor DC-DC converter with $\approx 97\%$ efficiency:
-* **Output Voltage to Battery**: $V_{bat} \approx \frac{V_{bus}}{2}$ (e.g., $\frac{9.0\text{V}}{2} \approx 4.5\text{V}$ before battery saturation)
-* **Output Current to Battery**: $I_{bat} \approx 2 \times I_{bus} \times \eta$ (e.g., $1.4\text{A}$ at VBUS converts to $\approx 2.7\text{A} - 2.8\text{A}$ into the cell)
+The **Silergy SP2130** operates as a switched-capacitor converter with $\approx 97\%$ efficiency:
+* Halves voltage: $V_{cp\_out} \approx \frac{V_{bus}}{2} \approx 4.5\text{ V}$ (clamped by battery impedance).
+* Doubles current: $I_{bat} \approx 2 \times I_{bus} \times \eta \approx 2 \times 1.39\text{ A} \times 0.97 \approx \mathbf{2.7\text{ A} - 2.8\text{ A}}$.
 
-### 3. Power Math & Adapter Limits
-* **Input Cable Power ($P_{bus}$)**:
-  $$P_{bus} = V_{bus} \times I_{bus}$$
-  * On a **20W adapter** offering $9.0\text{V} \times 1.8\text{A}$, the theoretical physical ceiling is **$16.2\text{W}$**.
-  * On a genuine **25W adapter** offering $9.0\text{V} \times 2.77\text{A}$, the theoretical physical ceiling is **$25.0\text{W}$**.
-  * At $V_{bus} = 9.0\text{V}$ and $I_{bus} = 1.4\text{A}$, the cable power drawn is $\mathbf{12.6\text{W}}$.
-* **Net Power Absorbed by the Battery ($P_{bat}$)**:
-  $$P_{bat} = V_{bat} \times I_{bat}$$
-  * At $V_{bat} = 3.98\text{V}$ and $I_{bat} = 2.78\text{A}$, the chemical storage power is:
-    $$3.98\text{V} \times 2.78\text{A} \approx \mathbf{11.06\text{W}}$$
-  > [!IMPORTANT]
-  > Multiplying cable voltage ($9\text{V}$) by battery current ($2.8\text{A}$) gives a fictitious value ($25.2\text{W}$) that confuses input and output stages of the 2:1 converter.
+### 3. Net Power Absorbed by the Battery ($P_{bat}$)
+* A 1S Lithium-ion cell operates between $3.4\text{ V}$ and $4.45\text{ V}$.
+* Simultaneous Fuel Gauge (SM5602) reading: $V_{bat} = 3.98\text{ V}$ and $I_{bat} = +2.78\text{ A}$.
+* Net chemical power stored:
+  $$P_{bat} = 3.98\text{ V} \times 2.78\text{ A} \approx \mathbf{11.06\text{ W}}$$
+* **Energy Balance:**
+  * Cable Input ($P_{bus}$): $\approx 12.5\text{ W}$
+  * Cell Delivery ($P_{bat}$): $\approx 11.1\text{ W}$
+  * System efficiency: $\frac{11.1\text{ W}}{12.5\text{ W}} \approx 88.8\%$ (accounting for USB connector resistance, charge pump switching losses, and active phone system power).
 
 ### 4. Electrochemical CC/CV Profile (Why power drops before 100%)
 Lithium-ion cells require a two-stage charge cycle:
@@ -136,7 +151,7 @@ Lithium-ion cells require a two-stage charge cycle:
 
 ## 🌡️ Thermal Mitigation Architecture
 
-Inside Qualcomm's thermal configuration (`/vendor/etc/thermal-engine.conf`), skin mitigation rules regulate high temperatures:
+Qualcomm's thermal engine configuration (`/vendor/etc/thermal-engine.conf`) defines skin mitigation rules:
 
 ```text
 [BATT_SKIN_MITIGATION]
@@ -182,19 +197,20 @@ In KernelSU module list, click **"Action" / "Execute"** to view real-time diagno
                 by @cai0fps                       
 ==================================================
 
- [+] Active Profile  : Mode ULTRA
- [+] Kernel Driver   : ACTIVE (Universal Kprobe @cai0fps)
- [+] USB Protocol    : SUPER FAST CHARGING (25W PPS ACTIVE)
+ [+] Active Profile  : Mode NORMAL
+ [+] Kernel Driver   : ACTIVE (Kprobe @cai0fps)
+ [+] USB Protocol    : SUPER FAST CHARGING (PPS ACTIVE)
  [+] Charge Pump     : ON (SP2130 2:1 mode active)
- [+] Battery Level   : 68% (Target: 100%)
- [+] Battery Voltage : 3.98 V
- [+] Real Current    : +2780 mA
- [+] Real Power      : 23.4 W delivered
+ [+] Battery Level   : 68%
+ [+] Cell Voltage    : 3.98 V (1S Battery Max 4.45V)
+ [+] Battery Current : +2780 mA
+ [+] Battery Power   : +11.1 W (net cell power)
+ [+] Cable Input     : ~12.5 W (VBUS Input 9V PPS)
+ [+] Cable Voltage   : ~9.0 V (USB-C PPS)
+ [+] Cable Current   : ~1390 mA (÷2 by SP2130)
  [+] Battery Temp    : 36.0 C
  [+] Chassis Temp    : 38.2 C (quiet-therm)
- [+] Thermal Level   : 0 (Full Power)
- [+] Thermal Bypass  : ACTIVE (Throttling disarmed)
- [+] Screen Bypass   : ACTIVE (25W unlocked with screen on)
+ [+] Thermal Level   : 0 (Normal)
  [!] Use of this module is at the user's sole risk and responsibility.
 
 ==================================================

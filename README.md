@@ -47,16 +47,16 @@ Silergy SP2130 (Charge Pump 2:1)             UPM6918 (Buck Charger)
 
 ---
 
-## 🧠 A Engenharia Reversa da Trava OEM
+### 🧠 Análise da Condição de Rejeição de APDOs < 2.000 mA
 
-Descompilando a função `usbpd_pd_contact` dentro de `pd_policy_manager.ko`, foi isolada a instrução de rejeição em assembly ARM64:
+Ao descompilar a função `usbpd_pd_contact` dentro do módulo de vendor `pd_policy_manager.ko` (build stock da Samsung), identificamos a instrução responsável por filtrar contratos de menor corrente:
 
 ```arm64
-// usbpd_pd_contact (pd_policy_manager.ko)
+// usbpd_pd_contact (pd_policy_manager.ko - build de referência)
 +0x1f8:  mov    w20, #-1             // Inicializa estado do APDO = não encontrado
 +0x1fc:  mov    w24, #0x2710         // Teto de tensão = 10.000 mV (10V)
 ...
-+0x250:  cmp    w4, #0x7d0           // <--- A TRAVA OEM: w4 < 2000 mA?
++0x250:  cmp    w4, #0x7d0           // <--- Condição de corte OEM: w4 < 2000 mA?
 +0x254:  b.lt   +0x280               // Se menor que 2.000 mA, DESCARTA O APDO!
 ...
 +0x2a8:  mov    w2, #0x2328          // Tensão padrão = 9000 mV
@@ -65,23 +65,25 @@ Descompilando a função `usbpd_pd_contact` dentro de `pd_policy_manager.ko`, fo
 +0x2b8:  bl     usbpd_pps_enable_charging
 ```
 
-### O Funcionamento do Hook Dinâmico (`pps_kp_override.ko`):
+### O Funcionamento do Hook via Kprobe (`pps_kp_override.ko`):
 1. **Pre-Handler 1 (`+0x250`)**:
-   * Lê a corrente anunciada pelo carregador diretamente em `regs->regs[4]`.
-   * Se for menor que 2.000 mA, armazena o valor real anunciado da fonte e eleva temporariamente `regs->regs[4]` para 2.000 para passar na comparação OEM sem descartar o APDO.
+   * Lê a corrente anunciada pelo carregador em `regs->regs[4]`.
+   * Se for menor que 2.000 mA (caso de adaptadores de 18W–20W que anunciam 1.800 mA), armazena a corrente suportada e substitui temporariamente `regs->regs[4]` por 2.000 mA para passar pela verificação sem descartar o contrato.
 2. **Pre-Handler 2 (`+0x2b0`)**:
-   * Intercepta a montagem do Request (RDO).
-   * Restaura o valor real anunciado em `regs->regs[3]`.
-   * O pacote RDO transmitido reflete a especificação suportada pela fonte, evitando requisição indevida de sobrecorrente.
+   * Intercepta a criação do pacote de requisição (RDO).
+   * Restaura a corrente real suportada em `regs->regs[3]`.
+   * Isso evita que o aparelho requisite corrente acima da capacidade nominal anunciada pelo carregador.
 
 > [!WARNING]
-> **Sensibilidade de Offsets e ABI:** Os offsets `+0x250` e `+0x2b0` dependem do binário exato do driver compilado pela Samsung. Atualizações de segurança mensais ou kernels customizados com diferentes opções de compilação podem alterar os endereços das instruções. Se o kernel divergir, os kprobes podem atingir instruções incorretas.
+> **Escopo do Desbloqueio e Sensibilidade de ABI:**
+> - Esta condição em `+0x250` explica especificamente a **rejeição de fontes com APDO < 2.000 mA** (como carregadores de 18W–20W com 1.8A). Fontes com APDO $\ge 2.000\text{ mA}$ (como 2,25A ou 2,77A) não são descartadas por essa instrução. Portanto, esse hook não é uma "chave mágica de 25W", mas sim um desbloqueio de compatibilidade para fontes PPS de menor corrente.
+> - Os offsets `+0x250` e `+0x2b0` e os registradores $x3$/$x4$ são específicos da compilação de referência do `pd_policy_manager.ko` da Samsung. Mudanças de firmware ou outros kernels podem deslocar as instruções e alterar a alocação de registradores.
 
 ---
 
 ## 📊 Decodificação de Protocolo: RDO Bruto Transmitido
 
-Durante a validação prática com carregador de 20W (APDO `3300–11000 mV @ 1800 mA`), capturamos o pacote de requisição bruto transmitido pelo chip TCPC:
+Durante a validação prática com carregador USB-PD de 20W (APDO `3300–11000 mV @ 1800 mA`), capturamos o pacote de requisição bruto transmitido pelo chip TCPC:
 
 ```text
 < 2423.777>TCPC-PE:NewReq, rdo:0x53038424
@@ -102,44 +104,54 @@ Durante a validação prática com carregador de 20W (APDO `3300–11000 mV @ 18
 | **Output Voltage** | [19..9] | `450` (`0x1C2`) | $450 \times 20\text{ mV} = \mathbf{9.000\text{ mV}}$ |
 | **Operating Current** | [6..0] | `36` (`0x24`) | $36 \times 50\text{ mA} = \mathbf{1.800\text{ mA}}$ |
 
+> [!NOTE]
+> **Interpretação do Contrato:** O RDO `0x53038424` comprova que o dispositivo negociou com sucesso um contrato PPS de **$9.0\text{ V} @ 1.8\text{ A}$ ($16.2\text{ W}$ máximo no VBUS)**. Ele demonstra o desbloqueio do protocolo PPS em uma fonte que antes caía para 5V, mas **não comprova 25W**, pois a fonte utilizada estava fisicamente limitada a 16,2W. A obtenção de potências superiores a 20W requer adaptador com APDO nominal correspondente (ex.: 9V @ 2,25A = 20,25W; 9V @ 2,77A = 25W).
+
 ---
 
-## ⚡ Entenda a Física do Carregamento: VBUS vs VBAT
+## ⚡ A Cadeia de Potência: VBUS, Charge Pump e Bateria
 
-Compreender o circuito evita interpretações equivocadas sobre as leituras de potência:
+Para interpretar corretamente as medições do sistema, é indispensável separar os diferentes pontos de medição do circuito elétrico:
 
-### 1. Tensão do Barramento ($V_{bus}$) vs Tensão da Bateria ($V_{bat}$)
-* **Tensão do Barramento (Cabo USB-C)**: No protocolo PPS, a fonte injeta entre **~9.0 V e 9.7 V** no cabo USB. Essa tensão elevada permite transmitir energia com menor corrente no condutor, reduzindo aquecimento resistivo ($P_{\text{perda}} = R \times I^2$).
-* **Tensão da Célula de Lítio (1S)**: A bateria opera entre **~3.4 V (0%)** e **~4.40 V (100%)**. Nenhuma tensão acima desse limite pode incidir diretamente na célula química.
+```
+[ Carregador ] ──(VBUS: ~9.0V / Ibus)──► [ SP2130 Charge Pump 2:1 ] ──(VBAT: ~4.0V / Ibat)──► [ Célula da Bateria ]
+  P_contrato = V_apdo × I_apdo            η ≈ 97%                                           P_bat = V_bat × I_bat
+  (Teto físico da fonte)                 I_bat ≈ 2 × I_bus × η                             (Química líquida absorvida)
+```
+
+### 1. Potência Contratada vs Potência de Entrada no VBUS ($P_{bus}$)
+* **Teto da Fonte ($P_{\text{contrato}}$)**: Determinado pelo APDO selecionado.
+  * Fonte 20W (APDO 9V @ 1.8A): Teto de **$16.2\text{ W}$**.
+  * Fonte 25W (APDO 9V @ 2.77A): Teto de **$25.0\text{ W}$**.
+* **Potência Medida na Entrada ($P_{bus} = V_{bus} \times I_{bus}$)**:
+  * No ensaio prático, com o contrato de 9V @ 1.8A ativo, a corrente de barramento operando em ponto intermediário de carga registrou $I_{bus} \approx 1.39\text{ A}$.
+  * Potência no cabo: $9.0\text{ V} \times 1.39\text{ A} \approx \mathbf{12.5\text{ W}}$.
 
 ### 2. Conversão 2:1 pelo Charge Pump (Silergy SP2130)
-O chip **SP2130** atua como conversor comutado a capacitores com rendimento de $\approx 97\%$:
-* **Tensão entregue à bateria**: $V_{bat} \approx \frac{V_{bus}}{2}$ (ex.: $\frac{9.0\text{ V}}{2} \approx 4.5\text{ V}$ antes da saturação)
-* **Corrente multiplicada**: $I_{bat} \approx 2 \times I_{bus} \times \eta$ (ex.: $1.4\text{ A}$ no cabo resulta em $\approx 2.7\text{ A} - 2.8\text{ A}$ na bateria)
+O chip **SP2130** atua como conversor chaveado capacitivo com rendimento de $\approx 97\%$:
+* Divide a tensão pela metade: $V_{cp\_out} \approx \frac{V_{bus}}{2} \approx 4.5\text{ V}$ (regulada pela impedância da célula).
+* Dobra a corrente entregue: $I_{bat} \approx 2 \times I_{bus} \times \eta \approx 2 \times 1.39\text{ A} \times 0.97 \approx \mathbf{2.7\text{ A} - 2.8\text{ A}}$.
 
-### 3. Cálculo Correto da Potência e Limites Físicos da Fonte
-* **Potência de Entrada no Cabo ($P_{bus}$)**:
-  $$P_{bus} = V_{bus} \times I_{bus}$$
-  * Em fonte de **20W** com contrato $9.0\text{ V} \times 1.8\text{ A}$, o teto físico é **$16.2\text{ W}$** no barramento.
-  * Em fonte genuína de **25W** (ex.: Samsung EP-TA800 com contrato $9.0\text{ V} \times 2.77\text{ A}$), o teto físico atinge **$25.0\text{ W}$**.
-  * Se a medição em dado instante registrar $V_{bus} = 9.0\text{ V}$ e $I_{bus} = 1.4\text{ A}$, a potência fornecida é $9.0 \times 1.4 \approx \mathbf{12.6\text{ W}}$.
-* **Potência Líquida Absorvida pela Célula ($P_{bat}$)**:
-  $$P_{bat} = V_{bat} \times I_{bat}$$
-  * Para $V_{bat} = 3.98\text{ V}$ e $I_{bat} = 2.78\text{ A}$, a potência química líquida é:
-    $$3.98\text{ V} \times 2.78\text{ A} \approx \mathbf{11.06\text{ W}}$$
-  > [!IMPORTANT]
-  > **Nota Dimensional:** Nunca multiplique a tensão do cabo ($9\text{ V}$) pela corrente da bateria ($2.8\text{ A}$). Esse cálculo ($9\text{ V} \times 2.8\text{ A} = 25.2\text{ W}$) mistura grandezas de dois estágios isolados pelo conversor 2:1, gerando uma potência fictícia.
+### 3. Potência Líquida Absorvida pela Célula ($P_{bat}$)
+* A bateria 1S opera entre $3.4\text{ V}$ e $4.45\text{ V}$.
+* Medição simultânea no Fuel Gauge SM5602: $V_{bat} = 3.98\text{ V}$ e $I_{bat} = +2.78\text{ A}$.
+* Potência líquida química armazenada:
+  $$P_{bat} = 3.98\text{ V} \times 2.78\text{ A} \approx \mathbf{11.06\text{ W}}$$
+* **Balanço Energético:**
+  * Entrada no cabo ($P_{bus}$): $\approx 12.5\text{ W}$
+  * Energia entregue à bateria ($P_{bat}$): $\approx 11.1\text{ W}$
+  * Rendimento global do sistema: $\frac{11.1\text{ W}}{12.5\text{ W}} \approx 88.8\%$ (incluindo perdas no conector USB, chaveamento do charge pump e consumo dos circuitos do smartphone).
 
-### 4. A Curva Química CC/CV (Por que a potência cai antes de 100%?)
+### 4. A Curva Eletroquímica CC/CV (Por que a potência cai antes de 100%?)
 O carregamento de baterias de íon de lítio divide-se em duas etapas obrigatórias:
 1. **Fase CC (Corrente Constante)**: De 0% até aproximadamente 75%–80%, a corrente permanece alta enquanto a tensão sobe gradativamente.
-2. **Fase CV (Tensão Constante)**: A partir de ~80%, a tensão atinge o patamar máximo (~4.35V a 4.45V). A física eletroquímica exige que a corrente caia progressivamente para estabilizar o potencial elétrico e prevenir danos moleculares aos eletrodos, finalizando próximo a 0 A em 100%. **Nenhum dispositivo seguro opera em potência máxima até 100%.**
+2. **Fase CV (Tensão Constante)**: A partir de ~80%, a tensão atinge o patamar máximo (~4.35V a 4.45V). A física eletroquímica exige que a corrente caia progressivamente para estabilizar o potencial elétrico e prevenir danos moleculares aos eletrodos, finalizando próximo a 0 A em 100%. **Nenhum dispositivo com baterias de lítio opera em potência máxima até 100%.**
 
 ---
 
 ## 🌡️ Mapeamento Térmico e Algoritmo de Arrefecimento
 
-No daemon térmico da Qualcomm (`/vendor/etc/thermal-engine.conf`), encontramos regras de mitigação para proteger o chassi:
+No daemon térmico da Qualcomm (`/vendor/etc/thermal-engine.conf`), existem regras de mitigação para proteger o chassi:
 
 ```text
 [BATT_SKIN_MITIGATION]
@@ -182,20 +194,24 @@ Na aba de módulos do KernelSU, toque no botão **"Ação" / "Executar"** para a
 ```text
 ==================================================
     GALAXY A05s — PAINEL DE TELEMETRIA PPS
-               por @cai0fps                      
+                por @cai0fps                      
 ==================================================
 
- [+] Driver Kernel   : ATIVO (Kprobe Universal @cai0fps)
- [+] Protocolo USB   : SUPER FAST CHARGING (PPS 25W ATIVO)
+ [+] Perfil Ativo    : Modo NORMAL
+ [+] Driver Kernel   : ATIVO (Kprobe @cai0fps)
+ [+] Protocolo USB   : SUPER FAST CHARGING (PPS ATIVO)
  [+] Charge Pump     : LIGADO (SP2130 modo 2:1 ativo)
- [+] Nivel Bateria   : 68% (Alvo: 100%)
- [+] Tensao Bateria  : 3.98 V
- [+] Corrente Real   : +2780 mA
+ [+] Nivel Bateria   : 68%
+ [+] Tensao Celula   : 3.98 V (Bateria 1S Max 4.45V)
+ [+] Corrente Bateria: +2780 mA
+ [+] Potencia Bateria: +11.1 W (líquidos na célula)
+ [+] Entrada no Cabo : ~12.5 W (Entrada VBUS 9V PPS)
+ [+] Tensao do Cabo  : ~9.0 V (USB-C PPS)
+ [+] Corrente Cabo   : ~1390 mA (÷2 pelo SP2130)
  [+] Temp. Bateria   : 36.0 C
  [+] Temp. Carcaca   : 38.2 C (quiet-therm)
- [+] Perfil Ativo    : ULTRA (Modo 3)
- [+] Bypass Termico  : ATIVO (cur_state=0)
- [+] Bypass de Tela  : ATIVO (siop=100 / 3.3A)
+ [+] Nivel Termico   : 0 (Normal)
+ [!] Uso deste modulo por conta e risco exclusivos do usuario.
 
 ==================================================
 ```

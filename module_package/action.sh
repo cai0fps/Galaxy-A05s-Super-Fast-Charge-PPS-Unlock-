@@ -43,8 +43,20 @@ vbat=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null || echo 0)
 ibat=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || echo 0)
 temp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null || echo 0)
 soc=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo 0)
-cdev26=$(cat /sys/class/thermal/cooling_device26/cur_state 2>/dev/null || echo 0)
 quiet_t=$(cat /sys/class/thermal/thermal_zone19/temp 2>/dev/null || echo 0)
+
+# Deteccao dinamica de mitigador termico de bateria
+cdev_val=0
+for cd in /sys/class/thermal/cooling_device*; do
+    [ -d "$cd" ] || continue
+    ctype=$(cat "$cd/type" 2>/dev/null)
+    case "$ctype" in
+        *battery*|*charge*|*chg*)
+            cdev_val=$(cat "$cd/cur_state" 2>/dev/null || echo 0)
+            break
+            ;;
+    esac
+done
 
 # Calculos matematicos puros sem awk
 vbat_v="$((vbat / 1000000)).$(((vbat % 1000000) / 10000))"
@@ -205,25 +217,25 @@ if [ "$IS_PT" = "1" ]; then
     echo " [+] Driver Kernel   : $drv_status"
     echo " [+] Protocolo USB   : $pps_status"
     echo " [+] Charge Pump     : $cp_state"
-    echo " [+] Nivel Bateria   : $soc% (Alvo: 100%)"
-    echo " [+] Tensao Célula   : $vbat_v V (Bateria 1S Max 4.45V)"
-    echo " [+] Corrente Real   : ${sign}${ibat_ma} mA (Bateria)"
-    echo " [+] Potencia Divid. : $power_w W ($p_label_pt)"
+    echo " [+] Nivel Bateria   : $soc%"
+    echo " [+] Tensao Celula   : $vbat_v V (Bateria 1S Max 4.45V)"
+    echo " [+] Corrente Bateria: ${sign}${ibat_ma} mA"
+    echo " [+] Potencia Bateria: $power_w W ($p_label_pt)"
     if [ "$is_charging" = "1" ]; then
-        echo " [+] Potencia Fonte  : $power_src_w W ($power_src_desc_pt)"
+        echo " [+] Entrada no Cabo : $power_src_w W ($power_src_desc_pt)"
         echo " [+] Tensao do Cabo  : $tensao_cabo"
         echo " [+] Corrente Cabo   : $cabo_label_pt"
     else
-        echo " [+] Potencia Fonte  : 0.0 W (Desconectado)"
+        echo " [+] Entrada no Cabo : 0.0 W (Desconectado)"
         echo " [+] Tensao do Cabo  : 0.0 V (Sem Cabo)"
         echo " [+] Corrente Cabo   : 0 mA (Sem Cabo)"
     fi
     echo " [+] Temp. Bateria   : $temp_c C"
     echo " [+] Temp. Carcaca   : $quiet_c C (quiet-therm)"
-    echo " [+] Nivel Termico   : $cdev26 (0 = Plena Potencia)"
+    echo " [+] Nivel Termico   : $cdev_val (0 = Normal)"
     if [ "$PROFILE" = "ULTRA" ]; then
-        echo " [+] Bypass Termico  : ATIVO (Throttling desarmado)"
-        echo " [+] Bypass de Tela  : ATIVO (25W liberado com tela ligada)"
+        echo " [+] Bypass Termico  : ATIVO (Mitigacao relaxada)"
+        echo " [+] Bypass de Tela  : ATIVO (Potencia liberada com tela ligada)"
     fi
     echo " [!] Uso deste modulo por conta e risco exclusivos do usuario."
 else
@@ -231,25 +243,25 @@ else
     echo " [+] Kernel Driver   : $drv_status"
     echo " [+] USB Protocol    : $pps_status"
     echo " [+] Charge Pump     : $cp_state"
-    echo " [+] Battery Level   : $soc% (Target: 100%)"
+    echo " [+] Battery Level   : $soc%"
     echo " [+] Cell Voltage    : $vbat_v V (1S Battery Max 4.45V)"
-    echo " [+] Real Current    : ${sign}${ibat_ma} mA (Battery)"
-    echo " [+] Divided Power   : $power_w W ($p_label_en)"
+    echo " [+] Battery Current : ${sign}${ibat_ma} mA"
+    echo " [+] Battery Power   : $power_w W ($p_label_en)"
     if [ "$is_charging" = "1" ]; then
-        echo " [+] Source Power    : $power_src_w W ($power_src_desc_en)"
+        echo " [+] Cable Input     : $power_src_w W ($power_src_desc_en)"
         echo " [+] Cable Voltage   : $tensao_cabo"
         echo " [+] Cable Current   : $cabo_label_en"
     else
-        echo " [+] Source Power    : 0.0 W (Disconnected)"
+        echo " [+] Cable Input     : 0.0 W (Disconnected)"
         echo " [+] Cable Voltage   : 0.0 V (No Cable)"
         echo " [+] Cable Current   : 0 mA (No Cable)"
     fi
     echo " [+] Battery Temp    : $temp_c C"
     echo " [+] Chassis Temp    : $quiet_c C (quiet-therm)"
-    echo " [+] Thermal Level   : $cdev26 (0 = Full Power)"
+    echo " [+] Thermal Level   : $cdev_val (0 = Normal)"
     if [ "$PROFILE" = "ULTRA" ]; then
-        echo " [+] Thermal Bypass  : ACTIVE (Throttling disarmed)"
-        echo " [+] Screen Bypass   : ACTIVE (25W unlocked with screen on)"
+        echo " [+] Thermal Bypass  : ACTIVE (Relaxed mitigation)"
+        echo " [+] Screen Bypass   : ACTIVE (Power limit relaxed with screen on)"
     fi
     echo " [!] Use of this module is at the user's sole risk and responsibility."
 fi
