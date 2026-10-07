@@ -16,5 +16,6 @@ elif [ -f /data/adb/ksu/util_functions.sh ]; then
   . /data/adb/ksu/util_functions.sh
   install_module
   exit 0
+else
+  require_new_magisk
 fi
-exit 0

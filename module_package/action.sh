@@ -20,9 +20,9 @@ else
 fi
 echo ""
 
-# Carregar configuracao ativa
+# Carregar configuracao ativa (Padrao Seguro: NORMAL)
 CONFIG="/data/adb/modules/galaxy_a05s_pps_unlock/config.prop"
-PROFILE="ULTRA"
+PROFILE="NORMAL"
 if [ -f "$CONFIG" ]; then
     . "$CONFIG"
 fi
@@ -43,7 +43,18 @@ vbat=$(cat /sys/class/power_supply/battery/voltage_now 2>/dev/null || echo 0)
 ibat=$(cat /sys/class/power_supply/battery/current_now 2>/dev/null || echo 0)
 temp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null || echo 0)
 soc=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo 0)
-quiet_t=$(cat /sys/class/thermal/thermal_zone19/temp 2>/dev/null || echo 0)
+# Deteccao dinamica da zona termica de carcaca (quiet-therm / chg-skin)
+quiet_t=0
+for tz in /sys/class/thermal/thermal_zone*; do
+    [ -d "$tz" ] || continue
+    ztype=$(cat "$tz/type" 2>/dev/null)
+    case "$ztype" in
+        *quiet*|*skin*|*chg*)
+            quiet_t=$(cat "$tz/temp" 2>/dev/null || echo 0)
+            break
+            ;;
+    esac
+done
 
 # Deteccao dinamica de mitigador termico de bateria
 cdev_val=0

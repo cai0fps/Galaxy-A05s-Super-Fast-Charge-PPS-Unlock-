@@ -44,7 +44,6 @@ fi
 # Limpar modulos antigos remanescentes para evitar conflitos
 rm -rf "/data/adb/modules/pps_fase3a" 2>/dev/null
 rm -rf "/data/adb/modules/pps_fase2" 2>/dev/null
-rm -f "/data/adb/modules/disable" 2>/dev/null
 
 # Desbloquear imediatamente qualquer trava residual
 echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null

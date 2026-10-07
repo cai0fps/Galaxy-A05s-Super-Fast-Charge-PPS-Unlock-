@@ -5,14 +5,29 @@ MODDIR="${0%/*}"
 echo 0 > /sys/class/power_supply/battery/batt_slate_mode 2>/dev/null
 echo 0 > /sys/class/power_supply/battery/store_mode 2>/dev/null
 
-# 2. Desativar protecoes nativas de corte OneUI (80/85%)
-settings put global protect_battery 0 > /dev/null 2>&1
-settings put system battery_protection 0 > /dev/null 2>&1
+# 2. Carregar configuracao do usuario (Padrao Seguro: NORMAL)
+CONFIG="$MODDIR/config.prop"
+if [ -f "$CONFIG" ]; then
+    . "$CONFIG"
+else
+    PROFILE="NORMAL"
+    COOLING_PRIORITY=0
+    BYPASS_THERMAL=0
+    SCREEN_ON_BYPASS=0
+fi
+
+# 3. Habilitar interruptores nativos de carregamento rapido OneUI
 settings put system super_fast_charging 1 > /dev/null 2>&1
 settings put system adaptive_fast_charging 1 > /dev/null 2>&1
 settings put system fast_charging 1 > /dev/null 2>&1
 
-# 3. Aguardar pd_policy_manager carregar no kernel (loop POSIX puro)
+# Desativar protect_battery APENAS se explicitamente configurado no perfil ULTRA
+if [ "$PROFILE" = "ULTRA" ]; then
+    settings put global protect_battery 0 > /dev/null 2>&1
+    settings put system battery_protection 0 > /dev/null 2>&1
+fi
+
+# 4. Aguardar pd_policy_manager carregar no kernel (loop POSIX puro)
 i=1
 while [ $i -le 30 ]; do
     if lsmod | grep -q pd_policy_manager || grep -q "usbpd_pd_contact" /proc/kallsyms; then
@@ -22,21 +37,10 @@ while [ $i -le 30 ]; do
     i=$((i + 1))
 done
 
-# 4. Carregar driver de kprobe universal assinado (@cai0fps)
+# 5. Carregar driver de kprobe (@cai0fps)
 if ! lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
     chmod 644 "$MODDIR/pps_kp_override.ko" 2>/dev/null
     insmod "$MODDIR/pps_kp_override.ko" > "$MODDIR/driver.log" 2>&1
-fi
-
-# 5. Carregar configuracao do usuario (Padrao Seguro: NORMAL)
-CONFIG="$MODDIR/config.prop"
-if [ -f "$CONFIG" ]; then
-    . "$CONFIG"
-else
-    PROFILE="NORMAL"
-    COOLING_PRIORITY=0
-    BYPASS_THERMAL=0
-    SCREEN_ON_BYPASS=0
 fi
 
 # Frequencias de CPU (Cluster Silver e Gold)
@@ -83,14 +87,15 @@ while true; do
     fi
     
     # ========================================================
-    # MODO 3 (ULTRA): RELAXAMENTO TERMICO COM TETO DE SEGURANCA
+    # MODO 3 (ULTRA): RELAXAMENTO TERMICO COM HISTÉRESE DE SEGURANÇA
     # ========================================================
-    # Protecao contra sobreaquecimento: se a bateria atingir >= 42 C,
-    # as protecoes nativas sao mantidas para resguardar as celulas.
+    # Desarme de mitigador apenas sob temperatura comprovadamente fria (< 38 C).
+    # Se atingir >= 40 C, cessa qualquer interferencia e permite que o daemon termico
+    # atue livremente.
     if [ "$PROFILE" = "ULTRA" ] && [ "$BYPASS_THERMAL" = "1" ]; then
         if [ "$ac_online" = "1" ]; then
             b_temp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null || echo 300)
-            if [ "$b_temp" -lt 420 ]; then
+            if [ "$b_temp" -lt 380 ]; then
                 for cdev in /sys/class/thermal/cooling_device*; do
                     [ -d "$cdev" ] || continue
                     ctype=$(cat "$cdev/type" 2>/dev/null)
@@ -106,43 +111,36 @@ while true; do
     fi
     
     # ========================================================
-    # LOGICA DE ARREFECIMENTO DINAMICO DE CPU
+    # LOGICA DE ARREFECIMENTO DINAMICO DE CPU COM RESET DE ESTADO
     # ========================================================
+    target_cap=0
     if [ "$ac_online" = "1" ] && [ "$screen_on" = "0" ]; then
         if [ "$PROFILE" = "ULTRA" ]; then
-            # Arrefecimento Ultra em standby
-            if [ "$is_capped" = "0" ]; then
-                chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
-                echo $LITTLE_ULTRA_COOL > "$LITTLE_MAX" 2>/dev/null
-                echo $BIG_ULTRA_COOL > "$BIG_MAX" 2>/dev/null
-                is_capped=1
-            fi
+            target_cap=2
         elif [ "$COOLING_PRIORITY" = "1" ]; then
-            # Arrefecimento Modo Inteligente em standby
-            if [ "$is_capped" = "0" ]; then
-                chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
-                echo $LITTLE_COOL > "$LITTLE_MAX" 2>/dev/null
-                echo $BIG_COOL > "$BIG_MAX" 2>/dev/null
-                is_capped=1
-            fi
-        elif [ "$COOLING_PRIORITY" = "0" ] && [ "$is_capped" = "1" ]; then
-            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
-            echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
-            echo $BIG_DEFAULT > "$BIG_MAX" 2>/dev/null
-            is_capped=0
-        fi
-    else
-        # Tela ligada ou fora da tomada: restaurar frequencias normais de CPU
-        if [ "$is_capped" = "1" ]; then
-            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
-            echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
-            echo $BIG_DEFAULT > "$BIG_MAX" 2>/dev/null
-            is_capped=0
+            target_cap=1
         fi
     fi
 
+    if [ "$target_cap" != "$is_capped" ]; then
+        if [ "$target_cap" = "2" ]; then
+            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+            echo $LITTLE_ULTRA_COOL > "$LITTLE_MAX" 2>/dev/null
+            echo $BIG_ULTRA_COOL > "$BIG_MAX" 2>/dev/null
+        elif [ "$target_cap" = "1" ]; then
+            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+            echo $LITTLE_COOL > "$LITTLE_MAX" 2>/dev/null
+            echo $BIG_COOL > "$BIG_MAX" 2>/dev/null
+        else
+            chmod 644 "$LITTLE_MAX" "$BIG_MAX" 2>/dev/null
+            echo $LITTLE_DEFAULT > "$LITTLE_MAX" 2>/dev/null
+            echo $BIG_DEFAULT > "$BIG_MAX" 2>/dev/null
+        fi
+        is_capped=$target_cap
+    fi
+
     # ========================================================
-    # NOTIFICACAO NATIVA DO SISTEMA AO ENGATAR PPS 25W
+    # NOTIFICACAO NATIVA DO SISTEMA AO ENGATAR PPS
     # ========================================================
     is_pps_active=0
     # PPS so pode ser engatado se conectado em tomada AC (ac_val=1)
@@ -161,11 +159,11 @@ while true; do
         if [ "$pps_notified" = "0" ]; then
             sys_locale=$(getprop persist.sys.locale 2>/dev/null || echo "pt-BR")
             if echo "$sys_locale" | grep -qi "pt"; then
-                n_title="⚡ Super Fast Charging 25W"
-                n_msg="PPS 9V Ativo! Charge Pump SP2130 (2:1) engatado com sucesso."
+                n_title="⚡ Super Fast Charging (PPS)"
+                n_msg="Protocolo PPS detectado! Charge Pump SP2130 (2:1) ativo."
             else
-                n_title="⚡ Super Fast Charging 25W"
-                n_msg="9V PPS Active! Silergy SP2130 Charge Pump (2:1) engaged."
+                n_title="⚡ Super Fast Charging (PPS)"
+                n_msg="PPS Protocol detected! Silergy SP2130 (2:1) engaged."
             fi
             cmd notification post -S bigtext -t "$n_title" "pps_unlock_notif" "$n_msg" >/dev/null 2>&1
             pps_notified=1

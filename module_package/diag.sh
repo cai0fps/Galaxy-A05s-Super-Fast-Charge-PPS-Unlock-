@@ -102,21 +102,21 @@ elif [ "$is_pps" = "1" ]; then
         if [ "$IS_PT" = "1" ]; then
             cable_rating="EXCELENTE (Grau A+)"
             cable_score="100/100"
-            cable_desc="Fluxo maximo de potencia atingido (>= 2400 mA). Cabo de excelente condutividade suportando entrega de 3A sem perdas perceptiveis."
+            cable_desc="Corrente elevada na celula (>= 2400 mA). Indicativo de baixa resistencia de contato e boa condutividade no caminho de alimentacao."
         else
             cable_rating="EXCELLENT (Grade A+)"
             cable_score="100/100"
-            cable_desc="Maximum power throughput reached (>= 2400 mA). Excellent conductivity cable supporting full 3A delivery without noticeable drop."
+            cable_desc="High cell current (>= 2400 mA). Indicates low contact resistance and good continuity across the power delivery path."
         fi
     elif [ "$ibat_ma" -ge 1850 ]; then
         if [ "$IS_PT" = "1" ]; then
             cable_rating="MUITO BOM (Grau A)"
             cable_score="88/100"
-            cable_desc="Fluxo estavel em regime PPS 9V (~1850 a 2400 mA). Rendimento adequado compativel com o patamar atual de carga da bateria (~50% SOC) e temperatura."
+            cable_desc="Fluxo estavel em regime PPS (~1850 a 2400 mA). Rendimento adequado compativel com o estado atual da bateria e temperatura."
         else
             cable_rating="VERY GOOD (Grade A)"
             cable_score="88/100"
-            cable_desc="Stable throughput in 9V PPS regime (~1850 to 2400 mA). Solid performance matching current battery charge level (~50% SOC) and temperature."
+            cable_desc="Stable current flow under PPS (~1850 to 2400 mA). Solid performance matching current battery state of charge and temperature."
         fi
     else
         if [ "$IS_PT" = "1" ]; then
@@ -198,7 +198,7 @@ if [ "$IS_PT" = "1" ]; then
     echo ""
     echo "[4] PROTOCOLO DO CARREGADOR & FONTE"
     if [ "$is_pps" = "1" ]; then
-        echo "  - Negociacao PPS    : [OK] 9.0V PPS (Super Fast Charging 25W)"
+        echo "  - Negociacao PPS    : [OK] 9.0V PPS (Super Fast Charging Ativo)"
         echo "  - Tensão da Tomada  : ~9.0 V (Negociado via USB-PD 3.0 PPS)"
     elif [ "$chg_type" = "2" ] && [ "$ac_val" = "1" ]; then
         echo "  - Negociacao AFC    : [INFO] 9.0V AFC (Adaptive Fast Charging 15W)"
@@ -230,9 +230,9 @@ if [ "$IS_PT" = "1" ]; then
     echo ""
     echo "=================================================="
     if [ "$is_pps" = "1" ] && [ "$kprobe_ok" = "1" ] && [ "$cp_present" = "1" ]; then
-        echo " RESULTADO: SISTEMA 100% OPERACIONAL PARA 25W PPS"
+        echo " RESULTADO: PROTOCOLO PPS E CHARGE PUMP ATIVOS COM SUCESSO"
     elif [ "$is_charging" = "0" ]; then
-        echo " RESULTADO: HARDWARE PRONTO (Conecte na tomada 25W)"
+        echo " RESULTADO: HARDWARE PRONTO (Conecte na tomada PPS)"
     elif [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
         echo " RESULTADO: CONECTADO AO PC VIA USB (5.0V Padrao)"
     else
@@ -279,7 +279,7 @@ else
     echo ""
     echo "[4] CHARGER PROTOCOL & SOURCE"
     if [ "$is_pps" = "1" ]; then
-        echo "  - PPS Negotiation   : [OK] 9.0V PPS (Super Fast Charging 25W)"
+        echo "  - PPS Negotiation   : [OK] 9.0V PPS (Super Fast Charging Active)"
         echo "  - Source Voltage    : ~9.0 V (Negotiated via USB-PD 3.0 PPS)"
     elif [ "$chg_type" = "2" ] && [ "$ac_val" = "1" ]; then
         echo "  - AFC Negotiation   : [INFO] 9.0V AFC (Adaptive Fast Charging 15W)"
@@ -311,9 +311,9 @@ else
     echo ""
     echo "=================================================="
     if [ "$is_pps" = "1" ] && [ "$kprobe_ok" = "1" ] && [ "$cp_present" = "1" ]; then
-        echo " RESULT: SYSTEM 100% OPERATIONAL FOR 25W PPS"
+        echo " RESULT: PPS PROTOCOL & CHARGE PUMP ENGAGED SUCCESSFULLY"
     elif [ "$is_charging" = "0" ]; then
-        echo " RESULT: HARDWARE READY (Plug into 25W wall charger)"
+        echo " RESULT: HARDWARE READY (Plug into PPS wall charger)"
     elif [ "$usb_val" = "1" ] && [ "$ac_val" = "0" ]; then
         echo " RESULT: CONNECTED TO PC VIA USB (5.0V Standard)"
     else
