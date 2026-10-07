@@ -10,7 +10,7 @@ esac
 if [ "$IS_PT" = "1" ]; then
     ui_print "=================================================="
     ui_print "   GALAXY A05s — SUPER FAST CHARGE (PPS UNLOCK)   "
-    ui_print "            Versao v1.6 Universal                 "
+    ui_print "                   Versao v1.7                    "
     ui_print "               por @cai0fps                       "
     ui_print "=================================================="
     ui_print ""
@@ -26,7 +26,7 @@ if [ "$IS_PT" = "1" ]; then
 else
     ui_print "=================================================="
     ui_print "   GALAXY A05s — SUPER FAST CHARGE (PPS UNLOCK)   "
-    ui_print "            Version v1.6 Universal                "
+    ui_print "                  Version v1.7                    "
     ui_print "                by @cai0fps                       "
     ui_print "=================================================="
     ui_print ""

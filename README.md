@@ -230,7 +230,7 @@ O repositório disponibiliza os arquivos completos do módulo tanto diretamente 
 
 ```
 Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
-├── module.prop                  # Metadados e versão do módulo v1.6
+├── module.prop                  # Metadados e versão do módulo v1.7
 ├── service.sh                   # Daemon de boot, detecção térmica dinâmica e arrefecimento
 ├── action.sh                    # Script do botão "Ação" do KernelSU com telemetria VBUS/VBAT
 ├── customize.sh                 # Menu de instalação interativo via teclas de volume
@@ -238,7 +238,7 @@ Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
 ├── config.prop                  # Perfil ativo selecionado pelo usuário
 ├── pps_kp_override.ko           # Driver LKM com kprobes (calibrado para Kernel 5.15 Bengal SM6225)
 ├── package_module.py            # Script automatizado de validação e empacotamento do ZIP
-├── Galaxy_A05s_SuperFastCharge_v1.6.zip # Pacote instalável gerado
+├── Galaxy_A05s_SuperFastCharge_v1.7.zip # Pacote instalável gerado
 ├── webroot/
 │   └── index.html               # WebUI monocromática (Preto/Branco) para KernelSU Next / MMRL
 ├── META-INF/
@@ -252,7 +252,7 @@ Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
 
 ## 🗺️ Roteiro Arquitetural e Próximos Passos (Source Capabilities → PDO/APDO → RDO → VBUS/IBUS)
 
-A versão atual (v1.6) foca no desbloqueio cirúrgico da restrição de $I < 2.000\text{ mA}$ presente no `pd_policy_manager.ko` de referência da Samsung para o Galaxy A05s (Kernel 5.15 Bengal). Para evoluir o projeto para uma solução de interoperabilidade abrangente, as seguintes etapas de engenharia compõem o roteiro técnico:
+A versão atual (v1.7) foca no desbloqueio cirúrgico da restrição de $I < 2.000\text{ mA}$ presente no `pd_policy_manager.ko` de referência da Samsung para o Galaxy A05s (Kernel 5.15 Bengal). Para evoluir o projeto para uma solução de interoperabilidade abrangente, as seguintes etapas de engenharia compõem o roteiro técnico:
 
 1. **Varredura Dinâmica de Assinatura de Instruções**:
    * Substituir os offsets fixos (`+0x250`, `+0x2b0`) por um motor de busca de padrão binário (*AArch64 instruction pattern matching*) em tempo de carregamento (`insmod`).

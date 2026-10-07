@@ -3,7 +3,7 @@ import os
 import shutil
 import hashlib
 
-out_zip = 'Galaxy_A05s_SuperFastCharge_v1.6.zip'
+out_zip = 'Galaxy_A05s_SuperFastCharge_v1.7.zip'
 
 # Module files to sync and package
 files_to_sync = [

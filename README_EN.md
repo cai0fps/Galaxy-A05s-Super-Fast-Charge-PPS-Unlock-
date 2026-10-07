@@ -234,7 +234,7 @@ The repository maintains the complete module files directly at the root (standar
 
 ```
 Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
-├── module.prop                  # Module metadata (v1.6)
+├── module.prop                  # Module metadata (v1.7)
 ├── service.sh                   # Boot daemon, dynamic thermal detection & cooldown
 ├── action.sh                    # KernelSU "Action" telemetry script (VBUS/VBAT)
 ├── customize.sh                 # Interactive volume cursor installer
@@ -242,7 +242,7 @@ Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
 ├── config.prop                  # Active user profile configuration
 ├── pps_kp_override.ko           # LKM kernel driver with kprobes (calibrated for Kernel 5.15 Bengal SM6225)
 ├── package_module.py            # Automated zip packager and permission verifier
-├── Galaxy_A05s_SuperFastCharge_v1.6.zip # Generated flashable module package
+├── Galaxy_A05s_SuperFastCharge_v1.7.zip # Generated flashable module package
 ├── webroot/
 │   └── index.html               # Clean monochrome (Black/White) WebUI dashboard
 ├── META-INF/
@@ -256,7 +256,7 @@ Galaxy-A05s-Super-Fast-Charge-PPS-Unlock-
 
 ## 🗺️ Architectural Roadmap & Next Steps (Source Capabilities → PDO/APDO → RDO → VBUS/IBUS)
 
-The current release (v1.6) targets the specific $I < 2,000\text{ mA}$ restriction within Samsung's reference `pd_policy_manager.ko` (Kernel 5.15 Bengal). To evolve into an extensible universal charging framework, the following architectural milestones are defined:
+The current release (v1.7) targets the specific $I < 2,000\text{ mA}$ restriction within Samsung's reference `pd_policy_manager.ko` (Kernel 5.15 Bengal). To evolve into an extensible universal charging framework, the following architectural milestones are defined:
 
 1. **Dynamic Instruction Pattern Scanning**:
    * Replace fixed opcode offsets (`+0x250`, `+0x2b0`) with an in-memory AArch64 instruction pattern scanner at load time (`insmod`).
