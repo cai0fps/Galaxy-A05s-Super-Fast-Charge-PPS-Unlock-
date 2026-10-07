@@ -7,7 +7,6 @@
 !/README_EN.md
 !/build_kprobe_override.py
 !/package_module.py
-!/Galaxy_A05s_SuperFastCharge_v1.7.zip
 
 # Allow standard Magisk / KernelSU module structure at repository root
 !/module.prop
@@ -25,3 +24,4 @@
 # Allow module_package directory
 !/module_package/
 !/module_package/**
+!/test_sig.ko
