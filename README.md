@@ -5,17 +5,17 @@
 > **Autor e Desenvolvedor:** [@cai0fps](https://github.com/cai0fps)  
 > **Dispositivo Alvo:** Samsung Galaxy A05s (`SM-A057M` / `SM-A057F` / `SM-A057G`)  
 > **Plataforma:** Qualcomm Snapdragon 680 4G (`SM6225` / `bengal`)  
-> **Compatibilidade:** KernelSU / KernelSU Next / Magisk — Stock OneUI & Custom ROMs  
+> **Compatibilidade:** KernelSU / KernelSU Next / Magisk — Calibrado para Samsung Galaxy A05s OneUI (Kernel 5.15 Bengal SM6225 com pd_policy_manager compatível). ROMs com alterações de kernel requerem validação de símbolos e offsets.  
 
 ---
 
 ## ⚡ Visão Geral do Projeto
 
-O **Samsung Galaxy A05s** possui hardware nativo de alta potência com topologia de **Charge Pump de divisão 2:1 (Silergy SP2130)** acoplado ao controlador USB Type-C PD PHY (**Richtek RT1711H**). Teoricamente, o aparelho suporta até 25W de carregamento (Super Fast Charging / USB-PD PPS).
+O **Samsung Galaxy A05s** possui hardware nativo de alta potência com topologia de **Charge Pump de divisão 2:1 (Silergy SP2130)** acoplado ao controlador USB Type-C PD PHY (**Richtek RT1711H**). O hardware suporta até 25W de carregamento (Super Fast Charging / USB-PD PPS) quando acoplado a fontes compatíveis com a especificação nominal de 9V @ 2,77A.
 
-No entanto, no firmware original da Samsung, existe uma trava artificial no driver de política de energia (`pd_policy_manager.ko`). Ao conectar fontes USB-PD PPS de 20W ou adaptadores universais cujo APDO declare corrente nominal inferior a 2.000 mA (por exemplo, `3.3V–11.0V @ 1.8A`), o kernel rejeita silenciosamente o contrato PPS e força o recuo para o modo lento padrão de 5V (1.5A a 2.0A).
+No entanto, no firmware original da Samsung, existe uma trava restritiva no driver de política de energia (`pd_policy_manager.ko`). Ao conectar fontes USB-PD PPS de 18W a 20W ou adaptadores universais cujo APDO declare corrente nominal inferior a 2.000 mA (por exemplo, `3.3V–11.0V @ 1.8A`), o kernel rejeita o contrato PPS e força o recuo para o modo lento padrão de 5V (1.5A a 2.0A).
 
-Este projeto desenvolveu uma solução universal via **Kernel Kprobes** e bypass de integridade ELF para interceptar dinamicamente a avaliação de contratos USB-PD, liberando o handshake PPS, a elevação do VBUS para ~9,0 V – 9,7 V e o chaveamento do SP2130 com regulação em malha fechada sem desativar nenhuma proteção térmica ou de hardware.
+Este projeto desenvolveu uma solução via **Kernel Kprobes** para interceptar dinamicamente a avaliação de contratos USB-PD, liberando o handshake PPS, a elevação do VBUS para ~9,0 V e o chaveamento do SP2130 com regulação em malha fechada. Nos modos padrão e inteligente, as proteções térmicas de fábrica e a curva de absorção CC/CV são estritamente preservadas.
 
 ---
 
@@ -68,11 +68,14 @@ Descompilando a função `usbpd_pd_contact` dentro de `pd_policy_manager.ko`, fo
 ### O Funcionamento do Hook Dinâmico (`pps_kp_override.ko`):
 1. **Pre-Handler 1 (`+0x250`)**:
    * Lê a corrente anunciada pelo carregador diretamente em `regs->regs[4]`.
-   * Se for menor que 2.000 mA, armazena o valor real em memória de controle (`[kp1 + 0x80]`) e eleva temporariamente `regs->regs[4]` para 2.000 para passar na comparação OEM sem falhas.
+   * Se for menor que 2.000 mA, armazena o valor real anunciado da fonte e eleva temporariamente `regs->regs[4]` para 2.000 para passar na comparação OEM sem descartar o APDO.
 2. **Pre-Handler 2 (`+0x2b0`)**:
-   * Intercepta a montagem do Request.
+   * Intercepta a montagem do Request (RDO).
    * Restaura o valor real anunciado em `regs->regs[3]`.
-   * O pacote RDO transmitido reflete com precisão exata a especificação da fonte conectada, sem provocar sobrecorrente no primário.
+   * O pacote RDO transmitido reflete a especificação suportada pela fonte, evitando requisição indevida de sobrecorrente.
+
+> [!WARNING]
+> **Sensibilidade de Offsets e ABI:** Os offsets `+0x250` e `+0x2b0` dependem do binário exato do driver compilado pela Samsung. Atualizações de segurança mensais ou kernels customizados com diferentes opções de compilação podem alterar os endereços das instruções. Se o kernel divergir, os kprobes podem atingir instruções incorretas.
 
 ---
 
@@ -101,36 +104,42 @@ Durante a validação prática com carregador de 20W (APDO `3300–11000 mV @ 18
 
 ---
 
-## ⚡ Entenda a Física do PPS 25W e a Conta dos Watts
+## ⚡ Entenda a Física do Carregamento: VBUS vs VBAT
 
-Muitos usuários se deparam com medições de ~4.4V no aplicativo e perguntam: *"Cadê os 9V do carregador? Por que a potência mostra ~12W e não 25W?"*. Aqui está a explicação da arquitetura de hardware:
+Compreender o circuito evita interpretações equivocadas sobre as leituras de potência:
 
-### 1. Tensão da Bateria (4.4V) vs Tensão do Cabo (9.0V)
-* **Bateria 1S de Íon de Lítio**: A célula física da bateria opera estritamente entre **3.4V (0%)** e **4.40V a 4.45V (100%)**. **Nenhuma bateria 1S pode receber mais de 4.45V diretamente**, sob risco imediato de colapso térmico e explosão.
-* **Tensão do Carregador (VBUS)**: Os **~9.0V a 9.7V** do protocolo PPS circulam **exclusivamente pelo cabo USB-C**, permitindo transmitir mais energia com corrente menor para evitar aquecimento da fiação.
+### 1. Tensão do Barramento ($V_{bus}$) vs Tensão da Bateria ($V_{bat}$)
+* **Tensão do Barramento (Cabo USB-C)**: No protocolo PPS, a fonte injeta entre **~9.0 V e 9.7 V** no cabo USB. Essa tensão elevada permite transmitir energia com menor corrente no condutor, reduzindo aquecimento resistivo ($P_{\text{perda}} = R \times I^2$).
+* **Tensão da Célula de Lítio (1S)**: A bateria opera entre **~3.4 V (0%)** e **~4.40 V (100%)**. Nenhuma tensão acima desse limite pode incidir diretamente na célula química.
 
-### 2. O Divisor 2:1 (Silergy SP2130 Charge Pump)
-* O chip dedicado **Silergy SP2130** atua como um conversor comutado de capacitores de ~97% de eficiência na razão **2:1**:
-  $$\text{Tensão na Bateria } (V_{bat}) = \frac{V_{bus}}{2} \approx \frac{9.0\text{V}}{2} = 4.5\text{V}$$
-  $$\text{Corrente na Bateria } (I_{bat}) = 2 \times I_{bus} \approx 2 \times 1.4\text{A} = 2.8\text{A}$$
-* Ele divide a tensão ao meio e **dobra a corrente**, garantindo que a célula receba carga ultrarrápida quase sem perdas térmicas.
+### 2. Conversão 2:1 pelo Charge Pump (Silergy SP2130)
+O chip **SP2130** atua como conversor comutado a capacitores com rendimento de $\approx 97\%$:
+* **Tensão entregue à bateria**: $V_{bat} \approx \frac{V_{bus}}{2}$ (ex.: $\frac{9.0\text{ V}}{2} \approx 4.5\text{ V}$ antes da saturação)
+* **Corrente multiplicada**: $I_{bat} \approx 2 \times I_{bus} \times \eta$ (ex.: $1.4\text{ A}$ no cabo resulta em $\approx 2.7\text{ A} - 2.8\text{ A}$ na bateria)
 
-### 3. A Conta dos Watts: Dividida vs Fonte
-* **Potência Dividida (Real na Bateria)**:
-  $$P_{bat} = V_{bat} \times I_{bat} = 4.4\text{V} \times 2.8\text{A} \approx \mathbf{12.3\text{ W}}$$
-  É a energia líquida em Watts sendo quimicamente acumulada na célula.
-* **Potência da Fonte (Escala Nominal 9V PPS)**:
-  $$P_{fonte} = 9.0\text{V} \times I_{bat} = 9.0\text{V} \times 2.8\text{A} \approx \mathbf{25.2\text{ W}}$$
-  É a conta equivalente à especificação nominal de 25W do carregador.
-* **Potência Consumida no Cabo USB**:
-  $$P_{cabo} = V_{bus} \times I_{bus} = 9.0\text{V} \times 1.4\text{A} \approx \mathbf{12.6\text{ W}}$$
-  O carregador injeta 12.6W no cabo, e o SP2130 entrega ~12.3W na célula (97.6% de rendimento).
+### 3. Cálculo Correto da Potência e Limites Físicos da Fonte
+* **Potência de Entrada no Cabo ($P_{bus}$)**:
+  $$P_{bus} = V_{bus} \times I_{bus}$$
+  * Em fonte de **20W** com contrato $9.0\text{ V} \times 1.8\text{ A}$, o teto físico é **$16.2\text{ W}$** no barramento.
+  * Em fonte genuína de **25W** (ex.: Samsung EP-TA800 com contrato $9.0\text{ V} \times 2.77\text{ A}$), o teto físico atinge **$25.0\text{ W}$**.
+  * Se a medição em dado instante registrar $V_{bus} = 9.0\text{ V}$ e $I_{bus} = 1.4\text{ A}$, a potência fornecida é $9.0 \times 1.4 \approx \mathbf{12.6\text{ W}}$.
+* **Potência Líquida Absorvida pela Célula ($P_{bat}$)**:
+  $$P_{bat} = V_{bat} \times I_{bat}$$
+  * Para $V_{bat} = 3.98\text{ V}$ e $I_{bat} = 2.78\text{ A}$, a potência química líquida é:
+    $$3.98\text{ V} \times 2.78\text{ A} \approx \mathbf{11.06\text{ W}}$$
+  > [!IMPORTANT]
+  > **Nota Dimensional:** Nunca multiplique a tensão do cabo ($9\text{ V}$) pela corrente da bateria ($2.8\text{ A}$). Esse cálculo ($9\text{ V} \times 2.8\text{ A} = 25.2\text{ W}$) mistura grandezas de dois estágios isolados pelo conversor 2:1, gerando uma potência fictícia.
+
+### 4. A Curva Química CC/CV (Por que a potência cai antes de 100%?)
+O carregamento de baterias de íon de lítio divide-se em duas etapas obrigatórias:
+1. **Fase CC (Corrente Constante)**: De 0% até aproximadamente 75%–80%, a corrente permanece alta enquanto a tensão sobe gradativamente.
+2. **Fase CV (Tensão Constante)**: A partir de ~80%, a tensão atinge o patamar máximo (~4.35V a 4.45V). A física eletroquímica exige que a corrente caia progressivamente para estabilizar o potencial elétrico e prevenir danos moleculares aos eletrodos, finalizando próximo a 0 A em 100%. **Nenhum dispositivo seguro opera em potência máxima até 100%.**
 
 ---
 
 ## 🌡️ Mapeamento Térmico e Algoritmo de Arrefecimento
 
-Descobrimos no arquivo de configuração do daemon térmico da Qualcomm (`/vendor/etc/thermal-engine.conf`) a regra de atenuação de corrente da bateria:
+No daemon térmico da Qualcomm (`/vendor/etc/thermal-engine.conf`), encontramos regras de mitigação para proteger o chassi:
 
 ```text
 [BATT_SKIN_MITIGATION]
@@ -142,31 +151,31 @@ actions        battery battery battery battery battery
 action_info    5      6      7      8      9
 ```
 
-* **Sensor de Carcaça (`quiet-therm`)**: Se o sensor ultrapassa **43 °C** (comum quando a tela de 90Hz e os núcleos da CPU estão ativos), o daemon sobe o nível térmico para **9**, forçando o FC2 a suspender o Charge Pump (`cp enable: 0`).
-* **Solução Inteligente do Módulo**: Quando o carregador é plugado e a tela apaga, o daemon do módulo arrefece a CPU Big Cluster. O sensor `quiet-therm` cai para $< 38\text{ °C}$, o nível térmico zera (`cdev26 = 0`) e o **Charge Pump opera no talo a ~2,8 A contínuos**.
+* **Sensor de Carcaça (`quiet-therm`)**: Se o sensor ultrapassa **43 °C** (comum com tela acesa e alta carga de CPU), o daemon aciona mitigação que reduz a corrente de carga.
+* **Arrefecimento Inteligente**: Ao apagar a tela, o daemon do módulo reduz o consumo dos núcleos de alta performance da CPU. Com menor dissipação combinada, o chassi mantém-se em patamares seguros sem engatilhar throttling precoce do charge pump.
 
 ---
 
 ## 🎮 Instalação e Funcionalidades
 
-O módulo foi empacotado no padrão oficial para **KernelSU**, **KernelSU Next** e **Magisk**:
+O módulo foi empacotado para **KernelSU**, **KernelSU Next** e **Magisk**:
 
-### 1. Novo Instalador com Cursor Interativo via Teclas de Volume
-Ao instalar o arquivo `.zip` no gerenciador root, um menu dinâmico com cursor interativo é exibido no console do instalador:
-* **`[VOL -]` = Navegar / Mudar Opção**: Move o cursor ciclicamente entre as opções (`1 -> 2 -> 3 -> 1...`).
-* **`[VOL +]` = CONFIRMAR**: Confirma a opção atualmente selecionada pelo cursor.
-* **Timeout de Segurança (30s)**: Caso não haja interação, seleciona automaticamente o Modo 3 (ULTRA).
+### 1. Instalador Interativo via Teclas de Volume
+Ao instalar o arquivo `.zip`, o console exibe um menu de opções:
+* **`[VOL -]` = Navegar**: Alterna entre os perfis (`1 -> 2 -> 3 -> 1...`).
+* **`[VOL +]` = CONFIRMAR**: Seleciona a opção destacada.
+* **Timeout Seguro (30s)**: Sem interação, seleciona automaticamente o **Modo 1 (Normal / Seguro)**.
 
-#### Perfis Disponíveis:
-* **`[>] 1. Modo Normal`**: Handshake PPS 25W direto até 100% de carga, mantendo os clocks de CPU em estado de fábrica.
-* **`[>] 2. Modo Inteligente`**: Potência de 25W até 100% com Arrefecimento Dinâmico de CPU durante tela apagada, garantindo carcaça fria.
-* **`[>] 3. Modo ULTRA (Recomendado / Máxima Potência)`**: 
-  - **25W Forçado** sem restrições.
-  - **Bypass Térmico Qualcomm**: Zera ativamente a atenuação do `thermal-engine` (`cooling_device26` e `27`), impedindo o corte para 10W.
-  - **Bypass de Tela Acesa (SIOP)**: Mantém corrente em 3.300 mA e `siop_level = 100` mesmo com a tela ligada.
-  - **Arrefecimento Ultra em Standby**: Clocks reduzidos para 902 MHz (Silver) e 825 MHz (Gold) com tela apagada para resfriamento rápido do chassi.
-
-*(Nota: Todas as travas e modos vitrine de 300mA e limites de 80%/85% foram permanentemente removidos. A carga opera com potência máxima até 100%).*
+#### Perfis de Operação:
+* **`[>] 1. Modo Normal (Recomendado - Padrão Seguro)`**:
+  - Habilita o handshake PPS para contratos abaixo de 2.000 mA.
+  - Mantém 100% intactas todas as políticas térmicas nativas e a curva de recarga natural da Samsung.
+* **`[>] 2. Modo Inteligente`**:
+  - Habilita o handshake PPS com otimização dinâmica de frequências de CPU em standby para manter a temperatura do chassi reduzida.
+  - Proteções térmicas e curva CV preservadas.
+* **`[>] 3. Modo ULTRA (Experimental / Testes de Bancada)`**:
+  - Relaxa temporariamente pontos de mitigação térmica se a bateria estiver em temperatura segura ($< 42^\circ\text{C}$).
+  - Possui salvaguarda estrita: caso a bateria atinja $42^\circ\text{C}$, todas as proteções térmicas do kernel retomam a regulação normal imediatamente.
 
 ### 2. Painel Nativo no App do KernelSU (`action.sh`)
 Na aba de módulos do KernelSU, toque no botão **"Ação" / "Executar"** para abrir o modal com telemetria instantânea:

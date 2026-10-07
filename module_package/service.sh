@@ -28,15 +28,15 @@ if ! lsmod | grep -qE "aw35615_whole|pps_kp_override"; then
     insmod "$MODDIR/pps_kp_override.ko" > "$MODDIR/driver.log" 2>&1
 fi
 
-# 5. Carregar configuracao do usuario
+# 5. Carregar configuracao do usuario (Padrao Seguro: NORMAL)
 CONFIG="$MODDIR/config.prop"
 if [ -f "$CONFIG" ]; then
     . "$CONFIG"
 else
-    PROFILE="ULTRA"
-    COOLING_PRIORITY=2
-    BYPASS_THERMAL=1
-    SCREEN_ON_BYPASS=1
+    PROFILE="NORMAL"
+    COOLING_PRIORITY=0
+    BYPASS_THERMAL=0
+    SCREEN_ON_BYPASS=0
 fi
 
 # Frequencias de CPU (Cluster Silver e Gold)
@@ -83,15 +83,25 @@ while true; do
     fi
     
     # ========================================================
-    # MODO 3 (ULTRA): BYPASS TERMICO
+    # MODO 3 (ULTRA): RELAXAMENTO TERMICO COM TETO DE SEGURANCA
     # ========================================================
-    if [ "$PROFILE" = "ULTRA" ] || [ "$BYPASS_THERMAL" = "1" ]; then
+    # Protecao contra sobreaquecimento: se a bateria atingir >= 42 C,
+    # as protecoes nativas sao mantidas para resguardar as celulas.
+    if [ "$PROFILE" = "ULTRA" ] && [ "$BYPASS_THERMAL" = "1" ]; then
         if [ "$ac_online" = "1" ]; then
-            # Desarmar apenas se o thermal-engine tentar ativar mitigacao (>0)
-            c26=$(cat /sys/class/thermal/cooling_device26/cur_state 2>/dev/null || echo 0)
-            [ "$c26" != "0" ] && echo 0 > /sys/class/thermal/cooling_device26/cur_state 2>/dev/null
-            c27=$(cat /sys/class/thermal/cooling_device27/cur_state 2>/dev/null || echo 0)
-            [ "$c27" != "0" ] && echo 0 > /sys/class/thermal/cooling_device27/cur_state 2>/dev/null
+            b_temp=$(cat /sys/class/power_supply/battery/temp 2>/dev/null || echo 300)
+            if [ "$b_temp" -lt 420 ]; then
+                for cdev in /sys/class/thermal/cooling_device*; do
+                    [ -d "$cdev" ] || continue
+                    ctype=$(cat "$cdev/type" 2>/dev/null)
+                    case "$ctype" in
+                        *battery*|*charge*|*chg*)
+                            cstate=$(cat "$cdev/cur_state" 2>/dev/null || echo 0)
+                            [ "$cstate" != "0" ] && echo 0 > "$cdev/cur_state" 2>/dev/null
+                            ;;
+                    esac
+                done
+            fi
         fi
     fi
     

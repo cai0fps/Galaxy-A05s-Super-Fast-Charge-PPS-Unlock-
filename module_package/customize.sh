@@ -63,7 +63,7 @@ ui_print ""
 
 # Seletor interativo com cursor
 choose_profile() {
-    local selected=3
+    local selected=1
     local total=3
     
     print_menu() {
@@ -77,19 +77,19 @@ choose_profile() {
         fi
         ui_print "--------------------------------------------------"
         if [ "$selected" = "1" ]; then
-            [ "$IS_PT" = "1" ] && ui_print " [>] 1. Modo Normal (PPS 25W Padrao ate 100%)" || ui_print " [>] 1. Normal Mode (Default 25W PPS up to 100%)"
+            [ "$IS_PT" = "1" ] && ui_print " [>] 1. Modo Normal (Padrao Seguro - Curva Termica e CV Mantidas)" || ui_print " [>] 1. Normal Mode (Safe Default - Thermal & CV Curves Kept)"
         else
-            [ "$IS_PT" = "1" ] && ui_print " [ ] 1. Modo Normal (PPS 25W Padrao ate 100%)" || ui_print " [ ] 1. Normal Mode (Default 25W PPS up to 100%)"
+            [ "$IS_PT" = "1" ] && ui_print " [ ] 1. Modo Normal (Padrao Seguro - Curva Termica e CV Mantidas)" || ui_print " [ ] 1. Normal Mode (Safe Default - Thermal & CV Curves Kept)"
         fi
         if [ "$selected" = "2" ]; then
-            [ "$IS_PT" = "1" ] && ui_print " [>] 2. Modo Inteligente (Arrefecimento de CPU em tela apagada)" || ui_print " [>] 2. Smart Mode (CPU Standby Cooldown up to 100%)"
+            [ "$IS_PT" = "1" ] && ui_print " [>] 2. Modo Inteligente (Arrefecimento de CPU em Standby)" || ui_print " [>] 2. Smart Mode (CPU Standby Cooldown with Safe Protections)"
         else
-            [ "$IS_PT" = "1" ] && ui_print " [ ] 2. Modo Inteligente (Arrefecimento de CPU em tela apagada)" || ui_print " [ ] 2. Smart Mode (CPU Standby Cooldown up to 100%)"
+            [ "$IS_PT" = "1" ] && ui_print " [ ] 2. Modo Inteligente (Arrefecimento de CPU em Standby)" || ui_print " [ ] 2. Smart Mode (CPU Standby Cooldown with Safe Protections)"
         fi
         if [ "$selected" = "3" ]; then
-            [ "$IS_PT" = "1" ] && ui_print " [>] 3. Modo ULTRA (25W Maximo Forcado + Bypass Termico)" || ui_print " [>] 3. ULTRA Mode (25W Max Forced + Thermal/Screen Bypass)"
+            [ "$IS_PT" = "1" ] && ui_print " [>] 3. Modo ULTRA (Experimental - Mitigacao Termica Relaxada)" || ui_print " [>] 3. ULTRA Mode (Experimental - Relaxed Thermal Mitigation)"
         else
-            [ "$IS_PT" = "1" ] && ui_print " [ ] 3. Modo ULTRA (25W Maximo Forcado + Bypass Termico)" || ui_print " [ ] 3. ULTRA Mode (25W Max Forced + Thermal/Screen Bypass)"
+            [ "$IS_PT" = "1" ] && ui_print " [ ] 3. Modo ULTRA (Experimental - Mitigacao Termica Relaxada)" || ui_print " [ ] 3. ULTRA Mode (Experimental - Relaxed Thermal Mitigation)"
         fi
         [ "$IS_PT" = "1" ] && ui_print " -> Aperte [VOL-] para alternar ou [VOL+] para confirmar..." || ui_print " -> Press [VOL-] to cycle or [VOL+] to confirm..."
     }
@@ -142,14 +142,14 @@ choose_profile() {
                 ;;
         esac
         
-        # Timeout de inatividade de 30s (padrao: Modo 3 ULTRA)
+        # Timeout de inatividade de 30s (padrao: Modo 1 Normal - Seguro)
         local now=$(date +%s 2>/dev/null || echo 0)
         if [ "$now" -gt 0 ] && [ "$((now - start_time))" -ge 30 ]; then
             ui_print ""
             if [ "$IS_PT" = "1" ]; then
-                ui_print "[i] Timeout (30s sem clique). Confirmando Opcao $selected automaticamente."
+                ui_print "[i] Timeout (30s sem clique). Confirmando Opcao $selected (Modo Seguro) automaticamente."
             else
-                ui_print "[i] Timeout (30s inactive). Auto-confirming Option $selected."
+                ui_print "[i] Timeout (30s inactive). Auto-confirming Option $selected (Safe Mode)."
             fi
             return $selected
         fi
@@ -159,10 +159,10 @@ choose_profile() {
 choose_profile
 CHOICE=$?
 
-SEL_PROFILE="ULTRA"
-SEL_COOLING="2"
-SEL_BYPASS_THERMAL="1"
-SEL_SCREEN_BYPASS="1"
+SEL_PROFILE="NORMAL"
+SEL_COOLING="0"
+SEL_BYPASS_THERMAL="0"
+SEL_SCREEN_BYPASS="0"
 
 case "$CHOICE" in
     1)
@@ -170,27 +170,34 @@ case "$CHOICE" in
         SEL_COOLING="0"
         SEL_BYPASS_THERMAL="0"
         SEL_SCREEN_BYPASS="0"
-        [ "$IS_PT" = "1" ] && ui_print "[>] Perfil Selecionado: Modo 1 (Normal 25W / 100%)" || ui_print "[>] Selected Profile: Mode 1 (Normal 25W / 100%)"
+        [ "$IS_PT" = "1" ] && ui_print "[>] Perfil Selecionado: Modo 1 (Normal Seguro - Protecoes Preservadas)" || ui_print "[>] Selected Profile: Mode 1 (Safe Normal - Protections Preserved)"
         ;;
     2)
         SEL_PROFILE="SMART"
         SEL_COOLING="1"
         SEL_BYPASS_THERMAL="0"
         SEL_SCREEN_BYPASS="0"
-        [ "$IS_PT" = "1" ] && ui_print "[>] Perfil Selecionado: Modo 2 (Inteligente 25W Turbo / 100%)" || ui_print "[>] Selected Profile: Mode 2 (Smart 25W Turbo / 100%)"
+        [ "$IS_PT" = "1" ] && ui_print "[>] Perfil Selecionado: Modo 2 (Inteligente - Resfriamento CPU Standby)" || ui_print "[>] Selected Profile: Mode 2 (Smart - CPU Standby Cooldown)"
         ;;
-    3|*)
+    3)
         SEL_PROFILE="ULTRA"
         SEL_COOLING="2"
         SEL_BYPASS_THERMAL="1"
         SEL_SCREEN_BYPASS="1"
         if [ "$IS_PT" = "1" ]; then
-            ui_print "[>] Perfil Selecionado: Modo 3 (ULTRA Potencia Maxima / 25W Forcado + Bypass Termico)"
-            ui_print " [!] AVISO: Modo ULTRA com Bypass Termico e de Tela ativado."
+            ui_print "[>] Perfil Selecionado: Modo 3 (ULTRA - Mitigacao Termica Relaxada)"
+            ui_print " [!] AVISO: Modo ULTRA com relaxamento de limitadores termicos. Monitore a temperatura!"
         else
-            ui_print "[>] Selected Profile: Mode 3 (ULTRA Max Power / 25W Forced + Thermal Bypass)"
-            ui_print " [!] NOTICE: ULTRA Mode with Thermal and Screen Bypass active."
+            ui_print "[>] Selected Profile: Mode 3 (ULTRA - Relaxed Thermal Mitigation)"
+            ui_print " [!] NOTICE: ULTRA Mode with relaxed thermal throttlers. Monitor device temperatures!"
         fi
+        ;;
+    *)
+        SEL_PROFILE="NORMAL"
+        SEL_COOLING="0"
+        SEL_BYPASS_THERMAL="0"
+        SEL_SCREEN_BYPASS="0"
+        [ "$IS_PT" = "1" ] && ui_print "[>] Perfil Selecionado: Modo 1 (Normal Seguro)" || ui_print "[>] Selected Profile: Mode 1 (Safe Normal)"
         ;;
 esac
 

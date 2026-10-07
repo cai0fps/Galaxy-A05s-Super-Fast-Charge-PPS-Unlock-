@@ -5,17 +5,17 @@
 > **Author & Developer:** [@cai0fps](https://github.com/cai0fps)  
 > **Target Device:** Samsung Galaxy A05s (`SM-A057M` / `SM-A057F` / `SM-A057G`)  
 > **Platform:** Qualcomm Snapdragon 680 4G (`SM6225` / `bengal`)  
-> **Compatibility:** KernelSU / KernelSU Next / Magisk — Stock OneUI & Custom ROMs  
+> **Compatibility:** KernelSU / KernelSU Next / Magisk — Specifically calibrated for Samsung Galaxy A05s OneUI (Kernel 5.15 Bengal SM6225 with matching pd_policy_manager). Kernels with different compilation options require verification of symbols and offsets.  
 
 ---
 
 ## ⚡ Project Overview
 
-The **Samsung Galaxy A05s** features native high-power hardware with a **2:1 switched capacitor divider Charge Pump topology (Silergy SP2130)** coupled to a USB Type-C PD PHY controller (**Richtek RT1711H**). In hardware specifications, the device natively supports up to **25W charging (Super Fast Charging / USB-PD PPS)**.
+The **Samsung Galaxy A05s** features native high-power hardware with a **2:1 switched-capacitor Charge Pump (Silergy SP2130)** coupled to a USB Type-C PD PHY controller (**Richtek RT1711H**). The hardware natively supports up to 25W charging (Super Fast Charging / USB-PD PPS) when connected to genuine 25W adapters (9V @ 2.77A).
 
-However, in Samsung's OEM firmware, an artificial clamp was enforced in the power policy manager kernel driver (`pd_policy_manager.ko`). When connecting 20W USB-PD PPS chargers or universal power adapters whose APDO declares a maximum current below 2,000 mA (for example, `3.3V–11.0V @ 1.8A`), the kernel silently rejects the PPS contract and forces a fallback to standard 5V slow charging (1.5A to 2.0A).
+However, in Samsung's OEM firmware, an artificial restriction was enforced in the power policy manager kernel driver (`pd_policy_manager.ko`). When connecting 18W–20W USB-PD PPS chargers or universal power adapters whose APDO declares a maximum current below 2,000 mA (for example, `3.3V–11.0V @ 1.8A`), the kernel rejects the PPS contract and forces a fallback to standard 5V slow charging (1.5A to 2.0A).
 
-This project implements a universal low-level solution via **Linux Kernel Kprobes** and dynamic ELF execution bypass to intercept USB-PD contract evaluation in real time. It enables PPS handshake negotiation, VBUS elevation to ~9.0V – 9.7V, and 2:1 SP2130 Charge Pump closed-loop switching without disabling safety cutoffs.
+This project uses **Linux Kernel Kprobes** to dynamically intercept USB-PD contract evaluation in real time. It enables PPS handshake negotiation, VBUS elevation to ~9.0V, and 2:1 SP2130 Charge Pump closed-loop switching. In Normal and Smart modes, OEM thermal protections and the electrochemical CC/CV charging curves are preserved.
 
 ---
 
@@ -101,36 +101,42 @@ During hardware validation with a 20W wall charger (APDO `3300–11000 mV @ 1800
 
 ---
 
-## ⚡ Physics of 25W PPS & The Watts Calculation
+## ⚡ Physics of Charging: VBUS vs VBAT Explained
 
-Many users notice telemetry showing ~4.4V and wonder: *"Where is the 9V from the charger? Why does power show ~12W instead of 25W?"*. Here is the physical hardware explanation:
+Understanding the power path helps interpret diagnostic measurements accurately:
 
-### 1. Battery Cell Voltage (4.4V) vs USB Cable Voltage (9.0V)
-* **1S Lithium-Ion Battery**: The physical battery cell operates strictly between **3.4V (0%)** and **4.40V to 4.45V (100%)**. **A 1S battery can never receive more than 4.45V directly**, as exceeding this threshold results in immediate thermal runaway.
-* **Charger Voltage (VBUS)**: The **~9.0V to 9.7V** negotiated over PPS runs **exclusively inside the USB-C cable**, transmitting more power with lower cable current to prevent cable heating.
+### 1. Bus Voltage ($V_{bus}$) vs Battery Voltage ($V_{bat}$)
+* **VBUS (USB Cable)**: Negotiated PPS voltage typically runs between **~9.0V and 9.7V** inside the cable. This higher voltage allows higher power transfer with less cable current, minimizing resistive heat loss ($P_{\text{loss}} = R \times I^2$).
+* **Battery Cell (1S Li-Ion)**: Operates strictly between **~3.4V (0%)** and **~4.40V (100%)**. Voltages above this range cannot be applied directly across the battery cell.
 
-### 2. The 2:1 Divider (Silergy SP2130 Charge Pump)
-* The dedicated **Silergy SP2130** acts as a switched-capacitor converter with ~97% efficiency in a **2:1 ratio**:
-  $$\text{Battery Voltage } (V_{bat}) = \frac{V_{bus}}{2} \approx \frac{9.0\text{V}}{2} = 4.5\text{V}$$
-  $$\text{Battery Current } (I_{bat}) = 2 \times I_{bus} \approx 2 \times 1.4\text{A} = 2.8\text{A}$$
-* It divides the incoming voltage by 2 and **doubles the current**, feeding ultra-fast charge directly into the cell with virtually no heat generation.
+### 2. 2:1 Down-Conversion by the SP2130 Charge Pump
+The **Silergy SP2130** acts as a switched-capacitor DC-DC converter with $\approx 97\%$ efficiency:
+* **Output Voltage to Battery**: $V_{bat} \approx \frac{V_{bus}}{2}$ (e.g., $\frac{9.0\text{V}}{2} \approx 4.5\text{V}$ before battery saturation)
+* **Output Current to Battery**: $I_{bat} \approx 2 \times I_{bus} \times \eta$ (e.g., $1.4\text{A}$ at VBUS converts to $\approx 2.7\text{A} - 2.8\text{A}$ into the cell)
 
-### 3. Watts Math: Divided vs Source Power
-* **Divided Power (Real Battery Power)**:
-  $$P_{bat} = V_{bat} \times I_{bat} = 4.4\text{V} \times 2.8\text{A} \approx \mathbf{12.3\text{ W}}$$
-  This is the net chemical energy being accumulated inside the battery cell at 4.4V.
-* **Source Power (Nominal 9V PPS Scale)**:
-  $$P_{source} = 9.0\text{V} \times I_{bat} = 9.0\text{V} \times 2.8\text{A} \approx \mathbf{25.2\text{ W}}$$
-  This is the nominal calculation corresponding to the charger's 25W specification.
-* **USB Cable Power Draw**:
-  $$P_{cable} = V_{bus} \times I_{bus} = 9.0\text{V} \times 1.4\text{A} \approx \mathbf{12.6\text{ W}}$$
-  The charger feeds 12.6W into the cable, and the SP2130 delivers ~12.3W to the cell (97.6% efficiency).
+### 3. Power Math & Adapter Limits
+* **Input Cable Power ($P_{bus}$)**:
+  $$P_{bus} = V_{bus} \times I_{bus}$$
+  * On a **20W adapter** offering $9.0\text{V} \times 1.8\text{A}$, the theoretical physical ceiling is **$16.2\text{W}$**.
+  * On a genuine **25W adapter** offering $9.0\text{V} \times 2.77\text{A}$, the theoretical physical ceiling is **$25.0\text{W}$**.
+  * At $V_{bus} = 9.0\text{V}$ and $I_{bus} = 1.4\text{A}$, the cable power drawn is $\mathbf{12.6\text{W}}$.
+* **Net Power Absorbed by the Battery ($P_{bat}$)**:
+  $$P_{bat} = V_{bat} \times I_{bat}$$
+  * At $V_{bat} = 3.98\text{V}$ and $I_{bat} = 2.78\text{A}$, the chemical storage power is:
+    $$3.98\text{V} \times 2.78\text{A} \approx \mathbf{11.06\text{W}}$$
+  > [!IMPORTANT]
+  > Multiplying cable voltage ($9\text{V}$) by battery current ($2.8\text{A}$) gives a fictitious value ($25.2\text{W}$) that confuses input and output stages of the 2:1 converter.
+
+### 4. Electrochemical CC/CV Profile (Why power drops before 100%)
+Lithium-ion cells require a two-stage charge cycle:
+1. **CC Stage (Constant Current)**: From 0% to approximately 75%–80%, current remains high while cell voltage rises.
+2. **CV Stage (Constant Voltage)**: Once the cell reaches its voltage ceiling (~4.35V–4.45V), current is progressively stepped down to prevent electrode degradation and overvoltage, tapering toward 0A at 100%. **No lithium-ion device can sustain peak charging power up to 100%.**
 
 ---
 
-## 🌡️ Thermal Throttling & Dynamic Cooldown Engine
+## 🌡️ Thermal Mitigation Architecture
 
-Analysis of Qualcomm's thermal daemon configuration (`/vendor/etc/thermal-engine.conf`) revealed the chassis skin mitigation rules:
+Inside Qualcomm's thermal configuration (`/vendor/etc/thermal-engine.conf`), skin mitigation rules regulate high temperatures:
 
 ```text
 [BATT_SKIN_MITIGATION]
@@ -142,29 +148,31 @@ actions        battery battery battery battery battery
 action_info    5      6      7      8      9
 ```
 
-* **Chassis Skin Sensor (`quiet-therm`)**: If chassis temperature exceeds **43 °C** (typical when the 90Hz display panel and CPU cores are active), the daemon sets thermal level to **9**, causing FC2 to shut down the Charge Pump (`cp enable: 0`) and cap current to $\le 1000\text{ mA}$ (~10W).
-* **Mode 3 (ULTRA) Bypass**: The module daemon actively overrides `cooling_device26` and `cooling_device27` cur_state to 0, neutralizes Samsung screen-on SIOP restrictions (`siop_level = 100`, `input_current_limit = 3.3A`), and applies aggressive standby CPU cooldown (Silver cores at 902MHz, Gold cores at 825MHz) while the screen is off to maintain continuous 25W throughput.
+* **Skin Temperature (`quiet-therm`)**: Above **43 °C**, the daemon triggers thermal mitigations to prevent chassis overheating.
+* **Smart Standby Cooldown**: When the screen is turned off during charging, the module lowers high-performance CPU clocks. Lower background heat keeps the chassis within safe thresholds without early thermal throttling.
 
 ---
 
-## 🎮 Installation & Features
+## 🎮 Installation & Profiles
 
-The module is packaged in standard Magisk / KernelSU / KernelSU Next zip format:
+The module is packaged for **KernelSU**, **KernelSU Next**, and **Magisk**:
 
-### 1. Interactive Volume Key Installer (Cursor Navigation)
-Flashing the `.zip` inside the root manager opens a live cursor menu with automatic language detection:
-* **`[VOL -]` = Navigate / Cycle Option**: Moves the cursor cyclically (`Mode 1` $\rightarrow$ `Mode 2` $\rightarrow$ `Mode 3` $\rightarrow$ `Mode 1...`).
-* **`[VOL +]` = CONFIRM**: Locks in the highlighted choice.
-* **Safety Timeout (30s)**: Automatically confirms Mode 3 (ULTRA) if no keys are pressed.
+### 1. Interactive Volume Key Installer
+During flash time:
+* **`[VOL -]` = Navigate**: Cycle between profiles (`1 -> 2 -> 3 -> 1...`).
+* **`[VOL +]` = CONFIRM**: Select the highlighted profile.
+* **Safe Timeout (30s)**: If no keys are pressed, automatically defaults to **Mode 1 (Normal / Safe)**.
 
-#### Available Profiles:
-* **`[>] 1. Normal Mode`**: Standard 25W PPS handshake up to 100% battery capacity with default CPU frequencies.
-* **`[>] 2. Smart Mode`**: Full 25W PPS charging with dynamic CPU standby cooldown during screen-off to keep the chassis cool.
-* **`[>] 3. ULTRA Mode (Recommended / Max Power)`**: 
-  - **25W Forced throughput** without artificial caps.
-  - **Qualcomm Thermal Bypass**: Disarms `cooling_device26/27` mitigation.
-  - **Screen-On Bypass (SIOP)**: Maintains 3,300 mA input ceiling and `siop_level = 100` even with the 90Hz screen illuminated.
-  - **Deep Standby CPU Cooldown**: Clocks reduced to 902 MHz (Silver) and 825 MHz (Gold) during screen-off for fast chassis heat dissipation.
+#### Operating Profiles:
+* **`[>] 1. Normal Mode (Recommended / Safe Default)`**:
+  - Unlocks PPS handshakes for chargers advertising $< 2,000\text{ mA}$.
+  - Keeps all factory thermal limits and the natural Samsung charge curve active.
+* **`[>] 2. Smart Mode`**:
+  - Unlocks PPS handshakes with dynamic CPU standby cooldown during screen-off.
+  - Safe thermal limits and CC/CV curve preserved.
+* **`[>] 3. ULTRA Mode (Experimental / Bench Testing)`**:
+  - Relaxes thermal mitigation levels while the battery stays under safe limits ($< 42^\circ\text{C}$).
+  - Enforces a safety cutoff: if battery reaches $42^\circ\text{C}$, OEM thermal throttling resumes immediately.
 
 ### 2. Native Telemetry Dashboard (`action.sh`)
 In KernelSU module list, click **"Action" / "Execute"** to view real-time diagnostics:
