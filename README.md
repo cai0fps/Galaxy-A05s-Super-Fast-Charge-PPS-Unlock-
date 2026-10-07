@@ -1,40 +1,99 @@
-# Galaxy A05s Super Fast Charge (PPS) Unlock v2.0
+# Galaxy A05s Super Fast Charge (PPS) Unlock
 
-> **ATENÇÃO:** O Antigravity e o projeto passaram por uma reestruturação COMPLETA (Fase 5). 
-> Abandone as versões antigas baseadas no Kprobe. O Kprobe (Phase 1-3) injetava valores hardcoded de 2000mA de forma insegura, corrompendo o RDO e impedindo a negociação correta com o carregador original.
+## 00. ÍNDICE / STATUS
 
-## O Problema Original
-O `pd_policy_manager` original da Samsung para o A05s exige que o carregador conectado forneça **mínimo de 2000mA** de corrente para liberar o perfil PPS. 
-No entanto, fontes originais de 20W e algumas de 25W anunciam `1800mA` ou `1670mA` em altas tensões (ex: 11.0V/1.8A = 19.8W).
-Como `1800mA < 2000mA`, a função OEM `usbpd_pd_contact` rejeita o APDO e te joga de volta para carregamento lento.
+**VERSÃO ATUAL**
+v2.0-native-patcher
 
-## Como o Patcher Nativo Hexadecimal v2.0 resolve isso?
-Ao invés de tentar enganar a função via injeção em memória (`kprobe`), nós modificamos estruturalmente o próprio arquivo ELF `pd_policy_manager.ko` do seu firmware atual usando um **Magic Mount do KernelSU/Magisk**.
+**PATCH ATIVO**
+`usbpd_pd_contact`: `CMP W4,#2000` → `CMP W4,#0`
 
-Durante a instalação (`customize.sh`), o script:
-1. Copia o `.ko` original do seu firmware.
-2. Faz um _dump_ hexadecimal e valida se ele é um ELF AArch64 compatível.
-3. Procura a **assinatura exata (24 bytes)** do check em `usbpd_pd_contact`:
-   ```asm
-   ldr  w4, [sp, #0x14]  ; Carrega a corrente do Source Capability
-   cmp  w4, #0x7d0       ; Compara com 2000mA
-   b.lt <rejeita>        ; Salta e rejeita se for menor
-   ```
-4. Aplica um `hexpatch` pontual trocando a comparação para:
-   ```asm
-   cmp  w4, #0
-   ```
-5. Valida a modificação.
-6. Instala a cópia nativamente patcheada por cima do arquivo original usando bind-mount, sem corromper nenhuma assinatura DM-Verity!
+**PATCH DESATIVADO**
+`usbpd_get_pps_status_max`
 
-Com essa instrução alterada, qualquer APDO > 0mA é aprovado, **mas a corrente real lida do carregador (ex: 1800mA) é preservada e repassada intacta para a montagem final do RDO**. O seu carregador entregará o máximo que ele consegue (ex: 19.8W a 11V/1.8A) de forma nativa.
+**OBJETIVO DO TESTE ATUAL**
+Permitir APDO 3300–11000 mV / 1800 mA sem falsificar corrente, tensão ou RDO.
 
-## Segurança
-- O patcher inclui quatro níveis de verificação estrita. Se a assinatura do Kernel da Samsung não for **exatamente idêntica**, a instalação é abortada sem fazer nenhuma modificação, garantindo que o módulo nunca quebre seu celular após atualizações OTA (Over-the-Air).
-- O patch 2 (`usbpd_get_pps_status_max`) vem **desativado por padrão**, sendo necessário ativá-lo no `customize.sh` apenas se novos testes provarem ser necessário.
+**NÃO COMPROVADO AINDA**
+25 W / 2250 mA / desbloqueio universal de PPS.
 
-## Instalação
-1. Remova a versão antiga v1.7.
-2. Instale o pacote `sfc_pps_native_v2.0.zip` via KernelSU / Magisk.
-3. Reinicie.
-4. Conecte o carregador original e verifique se aparece "Super Fast Charging".
+### Tabela de Progresso
+
+| Fase | Objetivo                             | Estado          |
+| ---- | ------------------------------------ | --------------- |
+| 1    | Reverse engineering                  | ✅               |
+| 2    | Remover filtro artificial de 2000 mA | ✅               |
+| 3A   | PPS Request                          | ✅               |
+| 3B   | ACCEPT / PS_RDY                      | ✅               |
+| 3C   | SP2130 / FC2                         | ✅               |
+| 3D   | Validar 20/25 W                      | ⏳               |
+| 3E   | Mapear votes/limites                 | ⏳               |
+| 4    | Determinar limites artificiais       | ⏳               |
+| 5    | Native Patcher                       | ✅ preparado     |
+| 5.1  | Primeiro boot real                   | 🔜              |
+| 6    | Desbloqueio 25 W, se comprovado      | 🔒 não iniciado |
+
+---
+
+## 01. DIAGNÓSTICO INICIAL
+- **01.1 Hardware:** Galaxy A05s (SM-A057M)
+- **01.2 UPM6918D:** CI de Carga e controle
+- **01.3 RT1711H:** Controlador TCPC (I2C Bus 2, `0x4e`)
+- **01.4 SP2130:** Carga rápida
+- **01.5 Stack USB-PD:** Kernel nativo (Samsung)
+
+## 02. FASE 1 — REVERSE ENGINEERING
+Mapeamento dos componentes vitais:
+- `pd_policy_manager`
+- `tcpc_class`
+- `tcpc_rt1711h`
+- `aw35615`
+- Fluxo de negociação
+
+## 03. FASE 2 — QUALIFICAÇÃO PPS
+- **APDO #4 / APDO #5:** Identificação dos APDOs enviados pela fonte.
+- **Filtro 2000 mA:** Descoberta do threshold mínimo OEM.
+- **Patch 1800 mA:** Adaptação lógica do threshold.
+- **Resultado:** Qualificação desbloqueada.
+
+## 04. FASE 3 — PPS REAL
+- **3A — REQUEST:** O aparelho envia requisição PPS genuína.
+- **3B — ACCEPT / PS_RDY:** O carregador aceita e libera VBUS.
+- **3C — SP2130 / FC2:** Handover para o circuito de alta potência.
+- **3D — 20 W / 25 W:** *(Em validação)*
+- **3E — VOTES / LIMITES:** *(Em mapeamento)*
+
+## 05. FASE 4 — LIMITES ARTIFICIAIS
+Auditoria de correntes, tensões, regras térmicas (*thermal*) e de power path. *(Pendente)*
+
+## 06. FASE 5 — NATIVE PATCHER
+- **6.1 Kprobe → Native:** Pivot completo abandonando Kprobe.
+- **6.2 assinatura ARM64:** `e41740b99f401f71.[bB]....54`
+- **6.3 `usbpd_pd_contact`:** Substituição `cmp w4, #2000` por `cmp w4, #0`.
+- **6.4 `usbpd_get_pps_status_max`:** Identificado, porém desativado.
+- **6.5 validação:** Regras estritas de ocorrência e binário.
+- **6.6 KernelSU / Magic Mount:** Substituição indetectável via bind-mount.
+- **6.7 teste físico:** *(Aguardando log do primeiro boot)*
+
+## 07. FASE 6 — 25 W / PPS
+(Bloqueado: Requer dados da Fase 5)
+- Fonte 20 W / 25 W
+- APDOs anunciados vs RDO
+- VBUS / IBUS
+- Potência real
+
+## 08. SEGURANÇA
+- OVP / OCP
+- Thermal / JEITA
+- SP2130 protection
+- Rollback do Patcher
+
+## 09. MÓDULO
+- `module.prop`
+- `customize.sh` (Motor do Patcher)
+- `action.sh`
+- Build / Package (`package_v2.py`)
+
+## 10. HISTÓRICO
+- `v1.7-kprobe`: Código legado descontinuado (Proof of Concept).
+- `v2.0-native-patcher`: Versão base atual.
